@@ -94,7 +94,7 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   // The location of a sighting, and the camera for in-app photos.
   'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()',
   'Content-Security-Policy': CSP,
-  // Only 2earl.com is for search engines.
+  // Only emanet.dev is for search engines.
   'X-Robots-Tag': 'noindex, nofollow',
 };
 

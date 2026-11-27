@@ -93,13 +93,25 @@ jobs:
           pnpm exec wrangler deploy --secrets-file "$SECRETS_FILE"
           rm -f "$SECRETS_FILE"
 
-      # Ten minutes, so the first deployment can attach the custom domain meanwhile (core infra/).
+      # Up to five minutes, so a first deployment can attach its custom domain meanwhile (core
+      # infra/). GitHub's runners are datacenter addresses that Cloudflare sometimes challenges
+      # (403 with cf-mitigated): that says nothing about the app, so it ends the check at once.
       - name: Smoke test
+        env:
+          URL: https://saha.emanet.dev/oauth/client.json
+          EXPECT: '"client_name":"Emanet Saha"'
         run: |
-          for i in $(seq 1 60); do
-            if curl -fsS --max-time 10 https://emanet-saha.2earl.com/oauth/client.json | grep -q '"client_name":"Emanet Saha"'; then
+          set -uo pipefail
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o "$RUNNER_TEMP/body" -D "$RUNNER_TEMP/headers" -w '%{http_code}' --max-time 10 "$URL" || true)
+            if [ "$code" = 200 ] && grep -q "$EXPECT" "$RUNNER_TEMP/body"; then
               echo "healthy"; exit 0
             fi
+            if grep -qi '^cf-mitigated:' "$RUNNER_TEMP/headers" 2>/dev/null; then
+              echo "::warning::Cloudflare challenged the runner (HTTP $code), so $URL couldn't be checked from here. Open it in a browser."
+              exit 0
+            fi
+            echo "attempt $i: HTTP $code"
             sleep 10
           done
-          echo "::warning::https://emanet-saha.2earl.com is not answering yet: set saha_live = true in 2earl/emanet-core infra/variables.tf and approve the infra run"
+          echo "::warning::$URL is not answering yet: is its custom domain attached (2earl/emanet-core infra/worker.tf)?"

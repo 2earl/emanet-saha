@@ -26,8 +26,8 @@ export default class extends WorkerEntrypoint {
     const digest = await crypto.subtle.digest('SHA-256',
       new TextEncoder().encode(String(form.get('code_verifier'))));
     const ok = form.get('grant_type') === 'authorization_code'
-      && form.get('resource') === 'https://emanet-saha.2earl.com'
-      && form.get('client_id') === 'https://emanet-saha.2earl.com/oauth/client.json'
+      && form.get('resource') === 'https://saha.emanet.dev'
+      && form.get('client_id') === 'https://saha.emanet.dev/oauth/client.json'
       && b64(digest) === challenge;
     if (!ok) return Response.json({ error: 'invalid_grant' }, { status: 400 });
     return Response.json({ access_token: 'token-' + uid, token_type: 'Bearer' });

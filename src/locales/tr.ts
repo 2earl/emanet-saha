@@ -260,5 +260,10 @@ export const tr: Catalog = {
     'Your location is needed. Allow location for this site, or take the photo with location on.':
       'Konumunuz gerekli. Bu site için konuma izin verin ya da fotoğrafı konum açıkken çekin.',
     'That didn’t work. Try again.': 'Bu işlem yapılamadı. Yeniden deneyin.',
+    Contact: 'İletişim',
+    'Privacy notice': 'Gizlilik',
+    'Skip to content': 'İçeriğe geç',
+    'Take a photo': 'Fotoğraf çek',
+    'Terms of use': 'Kullanım şartları',
   },
 };

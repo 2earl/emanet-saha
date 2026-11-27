@@ -1,3 +1,21 @@
+// Emanet Saha: names the photo an agent took, under the camera button (src/pages.ts photoInput).
+(() => {
+  const tr = document.documentElement.lang === 'tr';
+  for (const input of document.querySelectorAll('input[data-photo]')) {
+    const name = input.closest('.photo-field')?.querySelector('[data-photo-name]');
+    input.addEventListener('change', () => {
+      if (!name) return;
+      const file = input.files && input.files[0];
+      name.hidden = !file;
+      name.textContent = file
+        ? tr
+          ? `Fotoğraf hazır: ${file.name}`
+          : `Photo ready: ${file.name}`
+        : '';
+    });
+  }
+})();
+
 // Emanet Saha: fills in the phone's location and time when an agent reports a sighting.
 // Without it (location refused, no script) the server falls back to the photo's own GPS data.
 (() => {

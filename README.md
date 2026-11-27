@@ -1,6 +1,6 @@
 # Emanet Saha
 
-The app for field agents at **emanet-saha.2earl.com**, for phones first. Verified agents look for
+The app for field agents at **saha.emanet.dev**, for phones first. Verified agents look for
 vehicles that carry a seizure order (*yakalama şerhi*), call the police when they see one, and
 upload the tow and custodian (*yediemin*) documents. They are paid once the vehicle is in custody
 and the creditor has paid.

@@ -7,7 +7,7 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["global_fetch_strictly_public", "nodejs_als"],
 
-  // Served at https://emanet-saha.2earl.com: the custom domain is 2earl/emanet-core's
+  // Served at https://saha.emanet.dev: the custom domain is 2earl/emanet-core's
   // infra/worker.tf, attached once this Worker exists.
   "workers_dev": false,
   "preview_urls": false,
@@ -18,7 +18,7 @@
   },
 
   "vars": {
-    "SITE_ORIGIN": "https://emanet-saha.2earl.com",
+    "SITE_ORIGIN": "https://saha.emanet.dev",
     "AUTHORIZATION_SERVER": "https://login.2earl.com",
   },
 
