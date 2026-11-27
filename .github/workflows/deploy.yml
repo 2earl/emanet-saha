@@ -1,0 +1,105 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; never cancel one that has started.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Secrets live only in this environment: deploys from main only, each run approved by the owner.
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Until emanet-core's infra/ has created the database and its ID is in wrangler.jsonc.
+      - name: Check the database ID is set
+        run: |
+          if grep -q '"database_id": "00000000-0000-0000-0000-000000000000"' wrangler.jsonc; then
+            echo "::error::wrangler.jsonc still has the placeholder D1 database ID (2earl/emanet-core infra/README.md)"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test before deploying
+        run: pnpm test
+
+      # The app's own key is made here, once, and never leaves Cloudflare: nobody types or sees it.
+      # An existing key is never replaced: a new SESSION_PEPPER would sign every staff member out.
+      - name: Make the secrets this Worker doesn't have yet
+        id: secrets
+        run: |
+          set -euo pipefail
+          if ! list=$(pnpm exec wrangler secret list --format json 2>&1); then
+            if echo "$list" | grep -qi 'not found\|does not exist\|10007'; then
+              list='[]'
+            else
+              echo "::error::Could not list the Worker's secrets; not creating any."
+              exit 1
+            fi
+          fi
+          file="$RUNNER_TEMP/new-secrets.json"
+          umask 077
+          echo '{}' > "$file"
+          for name in SESSION_PEPPER; do
+            if echo "$list" | grep -q "\"$name\""; then
+              echo "$name exists"
+            else
+              value=$(openssl rand -base64 32)
+              jq --arg k "$name" --arg v "$value" '. + {($k): $v}' "$file" > "$file.tmp"
+              mv "$file.tmp" "$file"
+              echo "$name will be created"
+            fi
+          done
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      # Migrations run before the new code, so the code can rely on the schema. They must stay
+      # backward compatible with the code currently live (add, never rename or drop in one step).
+      - name: Apply D1 migrations
+        run: pnpm exec wrangler d1 migrations apply DB --remote
+
+      # New secrets go up with the version; existing ones are kept (--secrets-file is additive).
+      - name: Deploy Worker
+        env:
+          SECRETS_FILE: ${{ steps.secrets.outputs.file }}
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler deploy --secrets-file "$SECRETS_FILE"
+          rm -f "$SECRETS_FILE"
+
+      # Ten minutes, so the first deployment can attach the custom domain meanwhile (core infra/).
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 10 https://emanet-saha.2earl.com/oauth/client.json | grep -q '"client_name":"Emanet Saha"'; then
+              echo "healthy"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::https://emanet-saha.2earl.com is not answering yet: set saha_live = true in 2earl/emanet-core infra/variables.tf and approve the infra run"

@@ -1,0 +1,466 @@
+import { Hono } from 'hono';
+import {
+  SESSION_ABSOLUTE_SECONDS,
+  SIGNIN_TTL_SECONDS,
+  SignInError,
+  clientMetadata,
+  createWebSession,
+  currentSession,
+  endWebSession,
+  finishSignIn,
+  startSignIn,
+} from './auth';
+import { TAX_PROFILES, core, type AgentProfile, type EvidenceKind, type TaxProfile } from './core';
+import { readPhoto, storeEvidence } from './evidence';
+import {
+  SECURITY_HEADERS,
+  SESSION_COOKIE,
+  SIGNIN_COOKIE,
+  isSameOrigin,
+  readCookie,
+  safeReturnTo,
+  setCookie,
+  underRateLimit,
+  type AppContext,
+  type AppEnv,
+} from './http';
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  isLocale,
+  localizeHtml,
+  pickLocale,
+  withLocale,
+} from './i18n';
+import * as pages from './pages';
+
+/** Emanet Saha: the field agents' app (emanet-core docs/DESIGN.md §6). */
+
+const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+/** What an agent reads for each core error code. */
+const ERROR_TEXT: Record<string, string> = {
+  not_found: 'This vehicle isn’t yours any more: the time ran out or it was given up.',
+  agent_not_active: 'Your account can’t do this now.',
+  invalid_name: 'Enter your first and last name, as on your ID card.',
+  invalid_city: 'Enter the city you work in.',
+  invalid_phone: 'Enter a Turkish mobile number, like 0532 123 45 67.',
+  invalid_iban: 'That IBAN isn’t valid. It starts with TR and has 26 characters.',
+  invalid_tax_profile: 'Choose how you are paid.',
+  invalid_vkn: 'Enter your tax number (VKN): 10 digits, or 11 for a person.',
+  profile_locked: 'Your name, city and tax details were checked. Contact 2earl to change them.',
+  profile_incomplete: 'Fill in and save your details first.',
+  already_submitted: 'Your application is already sent.',
+  terms_changed: 'The rules have changed. Read them again and accept them.',
+  no_payout_rule: 'Vehicles can’t be shown right now. Try again later.',
+  not_huntable: 'This vehicle can’t be looked for any more.',
+  already_claimed: 'Another agent took this vehicle a moment ago.',
+  cooldown: 'You gave this vehicle up recently. You can take it again later.',
+  too_many_claims: 'You already hold as many vehicles as you can. Finish or give one up first.',
+  invalid_location: 'Your location couldn’t be read. Turn on location and try again.',
+  invalid_time: 'Your phone’s clock is wrong. Set it to automatic and try again.',
+  no_sighting: 'Report the sighting first.',
+  invalid_hash: 'The photo couldn’t be read. Take it again.',
+  duplicate_photo: 'This photo was used before. Take a new one.',
+  no_photo: 'Take a photo first.',
+  photo_too_large: 'The photo is too large. Take it again at a lower resolution.',
+  not_a_photo: 'Upload a photo (JPEG, PNG, WebP or HEIC).',
+  no_location:
+    'Your location is needed. Allow location for this site, or take the photo with location on.',
+};
+const errorText = (error: string) => ERROR_TEXT[error] ?? 'That didn’t work. Try again.';
+
+const DONE: Record<string, string> = {
+  saved: 'Saved.',
+  submitted: 'Sent. We’ll call you for the identity check.',
+  released: 'Given up. Someone else can look for it now.',
+  uploaded: 'Uploaded.',
+};
+const done = (c: AppContext) => DONE[c.req.query('done') ?? ''] ?? null;
+
+const EVIDENCE_KINDS: EvidenceKind[] = [
+  'tow_report',
+  'police_report',
+  'yediemin_receipt',
+  'yediemin_vehicle',
+];
+
+/** Where an agent belongs, by status. */
+const homeFor = (agent: AgentProfile) =>
+  agent.status === 'active' ? '/hunts' : agent.status === 'applied' ? '/apply' : '/status';
+
+export function createApp(now: () => number) {
+  const app = new Hono<AppEnv>();
+
+  // Language: ?lang= (remembered), the cookie, then the browser's.
+  app.use('*', async (c: AppContext, next) => {
+    const chosen = c.req.query('lang');
+    const locale = pickLocale({
+      query: chosen,
+      cookie: readCookie(c.req.header('Cookie'), LOCALE_COOKIE),
+      acceptLanguage: c.req.header('Accept-Language'),
+    });
+    c.set('locale', locale);
+    await withLocale({ locale, url: new URL(c.req.url) }, () => next());
+    if (isLocale(chosen) && c.req.method === 'GET') {
+      setCookie(c, LOCALE_COOKIE, chosen, LOCALE_COOKIE_MAX_AGE);
+    }
+    c.header('Content-Language', locale);
+    c.header('Vary', 'Accept-Language, Cookie', { append: true });
+    if (locale === DEFAULT_LOCALE) return;
+    if (!(c.res.headers.get('Content-Type') ?? '').startsWith('text/html')) return;
+    const page = await c.res.text();
+    const headers = new Headers(c.res.headers);
+    headers.delete('Content-Length');
+    c.res = new Response(
+      localizeHtml(page, locale).replace('<html lang="en">', `<html lang="${locale}">`),
+      { status: c.res.status, headers },
+    );
+  });
+
+  app.use('*', async (c: AppContext, next) => {
+    c.set('now', now());
+    c.set(
+      'session',
+      await currentSession(c.env, c.get('now'), readCookie(c.req.header('Cookie'), SESSION_COOKIE)),
+    );
+    if (c.req.method === 'POST' && !isSameOrigin(c)) {
+      return c.html(
+        pages.problem(
+          { signedIn: false },
+          'Not allowed',
+          'This form must be sent from Emanet Saha.',
+        ),
+        403,
+      );
+    }
+    await next();
+    c.res = new Response(c.res.body, c.res);
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) c.res.headers.set(name, value);
+    if (!c.res.headers.has('Cache-Control')) c.res.headers.set('Cache-Control', 'no-store');
+  });
+
+  const uid = (c: AppContext) => c.get('session')?.uid ?? '';
+  const agent = (c: AppContext) => c.get('agent');
+  const nav = (c: AppContext): pages.Nav => ({
+    signedIn: c.get('session') !== null,
+    active: (c.get('agent') as AgentProfile | undefined)?.status === 'active',
+  });
+  const notFound = (c: AppContext) =>
+    c.html(pages.problem(nav(c), 'Not found', 'This page doesn’t exist.'), 404);
+  const unwrap = <T>(result: { ok: true; value: T } | { ok: false; error: string }): T => {
+    if (!result.ok) throw new Error(`core: ${result.error}`);
+    return result.value;
+  };
+
+  /** A signed-in agent: registered in the core on first visit, with their profile loaded. */
+  const signedIn = async (c: AppContext, next: () => Promise<void>) => {
+    const session = c.get('session');
+    if (!session) {
+      const back = encodeURIComponent(c.req.method === 'GET' ? c.req.path : '/');
+      return c.redirect(`/signin?return=${back}`, c.req.method === 'GET' ? 302 : 303);
+    }
+    let profile = await core(c.env).profile(session.uid);
+    if (!profile.ok && profile.error === 'not_found') {
+      unwrap(await core(c.env).register(session.uid));
+      profile = await core(c.env).profile(session.uid);
+    }
+    c.set('agent', unwrap(profile));
+    await next();
+    return undefined;
+  };
+  /** Vehicles, claims and earnings: active agents only. */
+  const activeOnly = async (c: AppContext, next: () => Promise<void>) => {
+    if (agent(c).status !== 'active') return c.redirect(homeFor(agent(c)), 303);
+    await next();
+    return undefined;
+  };
+  for (const path of ['/apply', '/apply/*', '/status', '/account']) app.use(path, signedIn);
+  for (const path of ['/hunts', '/hunts/*', '/claims', '/claims/*', '/earnings']) {
+    app.use(path, signedIn, activeOnly);
+  }
+
+  // ---- Public ---------------------------------------------------------------------------------
+
+  // The start page: what this is, or for a signed-in agent the page for where they are.
+  app.use('/', async (c: AppContext, next) => (c.get('session') ? signedIn(c, next) : next()));
+  app.get('/', (c) => {
+    if (!c.get('session')) return c.html(pages.home());
+    return c.redirect(homeFor(agent(c)), 302);
+  });
+
+  app.get('/terms', (c) => c.html(pages.terms(nav(c))));
+
+  app.get('/oauth/client.json', (c) => {
+    const response = c.json(clientMetadata(c.env));
+    response.headers.set('Cache-Control', 'public, max-age=300');
+    return response;
+  });
+
+  app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+
+  // ---- Sign-in ----------------------------------------------------------------------------------
+
+  app.get('/signin', async (c) => {
+    if (!(await underRateLimit(c, 'signin'))) {
+      return c.html(
+        pages.problem(nav(c), 'Too many attempts', 'Wait a minute and try again.'),
+        429,
+      );
+    }
+    const returnTo = safeReturnTo(c.req.query('return'));
+    if (c.get('session')) return c.redirect(returnTo ?? '/', 302);
+    const { cookieValue, location } = await startSignIn(c.env, c.get('now'), returnTo);
+    setCookie(c, SIGNIN_COOKIE, cookieValue, SIGNIN_TTL_SECONDS);
+    return c.redirect(location, 302);
+  });
+
+  app.get('/callback', async (c) => {
+    setCookie(c, SIGNIN_COOKIE, '', 0);
+    if (c.req.query('error')) {
+      return c.html(
+        pages.problem(nav(c), 'Not signed in', 'Sign-in was cancelled or not allowed.'),
+        400,
+      );
+    }
+    try {
+      const {
+        uid: user,
+        aal2At,
+        returnTo,
+      } = await finishSignIn(c.env, c.get('now'), {
+        cookieValue: readCookie(c.req.header('Cookie'), SIGNIN_COOKIE),
+        state: c.req.query('state') ?? null,
+        code: c.req.query('code') ?? null,
+        iss: c.req.query('iss') ?? null,
+      });
+      const previous = c.get('session');
+      if (previous) await endWebSession(c.env, previous);
+      setCookie(
+        c,
+        SESSION_COOKIE,
+        await createWebSession(c.env, c.get('now'), user, aal2At),
+        SESSION_ABSOLUTE_SECONDS,
+      );
+      return c.redirect(safeReturnTo(returnTo) ?? '/', 302);
+    } catch (error) {
+      if (!(error instanceof SignInError)) throw error;
+      console.error('sign-in failed', error.message);
+      return c.html(
+        pages.problem(nav(c), 'Not signed in', 'Sign-in didn’t complete. Start again.'),
+        400,
+      );
+    }
+  });
+
+  app.post('/signout', async (c) => {
+    const session = c.get('session');
+    if (session) await endWebSession(c.env, session);
+    setCookie(c, SESSION_COOKIE, '', 0);
+    return c.redirect('/', 303);
+  });
+
+  // ---- Joining ----------------------------------------------------------------------------------
+
+  const formValues = async (c: AppContext) => {
+    const form = await c.req.parseBody();
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(form)) values[key] = text(value);
+    return values;
+  };
+  const profileInput = (v: Record<string, string>) => ({
+    legalName: v.legal_name ?? '',
+    city: v.city ?? '',
+    phone: v.phone ?? '',
+    iban: v.iban ?? '',
+    taxProfile: (TAX_PROFILES.includes(v.tax_profile as TaxProfile)
+      ? v.tax_profile
+      : 'individual') as TaxProfile,
+    vkn: v.vkn ? v.vkn : null,
+  });
+
+  app.get('/apply', (c) => {
+    if (agent(c).status !== 'applied') return c.redirect(homeFor(agent(c)), 302);
+    return c.html(pages.apply(nav(c), agent(c), pages.profileValues(agent(c)), null, done(c)));
+  });
+
+  app.post('/apply/profile', async (c) => {
+    const v = await formValues(c);
+    const result = await core(c.env).updateProfile(uid(c), profileInput(v));
+    if (!result.ok)
+      return c.html(pages.apply(nav(c), agent(c), v, errorText(result.error), null), 422);
+    return c.redirect('/apply?done=saved', 303);
+  });
+
+  app.post('/apply/submit', async (c) => {
+    const v = await formValues(c);
+    if (v.accept !== '1') {
+      return c.html(
+        pages.apply(
+          nav(c),
+          agent(c),
+          pages.profileValues(agent(c)),
+          'Accept the rules to continue.',
+          null,
+        ),
+        422,
+      );
+    }
+    const result = await core(c.env).submit(uid(c), v.terms ?? '');
+    if (!result.ok) {
+      return c.html(
+        pages.apply(nav(c), agent(c), pages.profileValues(agent(c)), errorText(result.error), null),
+        422,
+      );
+    }
+    return c.redirect('/status?done=submitted', 303);
+  });
+
+  app.get('/status', (c) => {
+    if (agent(c).status === 'active' || agent(c).status === 'applied') {
+      return c.redirect(homeFor(agent(c)), 302);
+    }
+    return c.html(pages.waiting(nav(c), agent(c)));
+  });
+
+  app.get('/account', (c) =>
+    c.html(pages.account(nav(c), agent(c), pages.profileValues(agent(c)), null, done(c))),
+  );
+
+  app.post('/account', async (c) => {
+    const v = await formValues(c);
+    const result = await core(c.env).updateProfile(uid(c), profileInput(v));
+    if (!result.ok)
+      return c.html(pages.account(nav(c), agent(c), v, errorText(result.error), null), 422);
+    return c.redirect('/account?done=saved', 303);
+  });
+
+  // ---- Vehicles and claims ----------------------------------------------------------------------
+
+  const showHunts = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {
+    const city = c.req.query('city')?.trim() || agent(c).city || null;
+    const result = await core(c.env).hunts(uid(c), city ? { city } : {});
+    const list = result.ok ? result.value : [];
+    const message = error ?? (result.ok ? null : errorText(result.error));
+    return c.html(pages.hunts(nav(c), list, city, agent(c), message, done(c)), status);
+  };
+
+  app.get('/hunts', (c) => showHunts(c, null));
+
+  app.post('/hunts/:vehicle/claim', async (c) => {
+    // Per agent, not per address: mobile networks put many phones behind one IP.
+    const { success } = await c.env.FORM_RATE_LIMITER.limit({ key: `claim:${uid(c)}` });
+    if (!success) {
+      return c.html(
+        pages.problem(nav(c), 'Too many attempts', 'Wait a minute and try again.'),
+        429,
+      );
+    }
+    const result = await core(c.env).claim(uid(c), c.req.param('vehicle'));
+    if (!result.ok)
+      return showHunts(c, errorText(result.error), result.error === 'already_claimed' ? 409 : 422);
+    return c.redirect(`/claims/${result.value.id}`, 303);
+  });
+
+  app.get('/claims', async (c) =>
+    c.html(pages.claims(nav(c), unwrap(await core(c.env).myClaims(uid(c))), done(c))),
+  );
+
+  const showClaim = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {
+    const id = c.req.param('id') ?? '';
+    const details = await core(c.env).claimDetails(uid(c), id);
+    if (!details.ok) return notFound(c);
+    const mine = unwrap(await core(c.env).myClaims(uid(c))).find((m) => m.id === id);
+    return c.html(
+      pages.claim(nav(c), details.value, mine, uid(c), c.get('now'), error, done(c)),
+      status,
+    );
+  };
+
+  app.get('/claims/:id', (c) => showClaim(c, null));
+
+  app.post('/claims/:id/release', async (c) => {
+    const result = await core(c.env).release(uid(c), c.req.param('id'));
+    if (!result.ok) return showClaim(c, errorText(result.error), 422);
+    return c.redirect('/claims?done=released', 303);
+  });
+
+  app.get('/claims/:id/found', async (c) => {
+    const details = await core(c.env).claimDetails(uid(c), c.req.param('id'));
+    if (!details.ok) return notFound(c);
+    if (details.value.claim.state === 'reporting')
+      return c.redirect(`/claims/${c.req.param('id')}`, 302);
+    return c.html(pages.found(nav(c), details.value, null));
+  });
+
+  /**
+   * The sighting: where the phone was (from the browser, else the photo's GPS) and when (the
+   * photo's own time if it has one), then the photo as the first evidence.
+   */
+  app.post('/claims/:id/found', async (c) => {
+    const id = c.req.param('id');
+    const details = await core(c.env).claimDetails(uid(c), id);
+    if (!details.ok) return notFound(c);
+    const fail = (error: string) =>
+      c.html(pages.found(nav(c), details.value, errorText(error)), 422);
+    const form = await c.req.parseBody();
+    const photo = await readPhoto(form.photo);
+    if (!photo.ok) return fail(photo.error);
+    const number = (key: string) => {
+      const value = Number(text(form[key]));
+      return text(form[key]) !== '' && Number.isFinite(value) ? value : undefined;
+    };
+    const lat = number('lat') ?? photo.value.facts.lat;
+    const lng = number('lng') ?? photo.value.facts.lng;
+    if (lat === undefined || lng === undefined) return fail('no_location');
+    const accuracy = number('accuracy');
+    const deviceTime = number('taken_at');
+    const takenAt =
+      photo.value.facts.takenAt ??
+      (deviceTime === undefined ? c.get('now') : Math.floor(deviceTime / 1000));
+    const sighting = await core(c.env).sighting(uid(c), id, {
+      lat,
+      lng,
+      taken_at: takenAt,
+      ...(accuracy === undefined ? {} : { accuracy_m: accuracy }),
+    });
+    if (!sighting.ok) return fail(sighting.error);
+    const stored = await storeEvidence(c.env, uid(c), id, 'scene', photo.value);
+    if (!stored.ok) return fail(stored.error);
+    return c.redirect(`/claims/${id}/call`, 303);
+  });
+
+  app.get('/claims/:id/call', async (c) => {
+    const details = await core(c.env).claimDetails(uid(c), c.req.param('id'));
+    if (!details.ok) return notFound(c);
+    return c.html(pages.call(nav(c), details.value));
+  });
+
+  app.post('/claims/:id/evidence', async (c) => {
+    const id = c.req.param('id');
+    const form = await c.req.parseBody();
+    const kind = text(form.kind) as EvidenceKind;
+    if (!EVIDENCE_KINDS.includes(kind)) return showClaim(c, errorText('x'), 422);
+    const photo = await readPhoto(form.photo);
+    if (!photo.ok) return showClaim(c, errorText(photo.error), 422);
+    const stored = await storeEvidence(c.env, uid(c), id, kind, photo.value);
+    if (!stored.ok) {
+      return showClaim(c, errorText(stored.error), stored.error === 'duplicate_photo' ? 409 : 422);
+    }
+    return c.redirect(`/claims/${id}?done=uploaded`, 303);
+  });
+
+  app.get('/earnings', async (c) =>
+    c.html(pages.earnings(nav(c), unwrap(await core(c.env).earnings(uid(c))), agent(c))),
+  );
+
+  // Static files (styles, script, icon, manifest); anything else is not found.
+  app.get('*', async (c) => {
+    const asset = await c.env.ASSETS.fetch(c.req.raw);
+    if (asset.status !== 404) return asset;
+    return notFound(c);
+  });
+
+  return app;
+}
