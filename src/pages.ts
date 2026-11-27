@@ -184,6 +184,15 @@ const TAX_LABEL: Record<TaxProfile, string> = {
 function profileFields(values: Record<string, string>, locked: boolean): string {
   const lockedAttr = locked ? ' readonly' : '';
   return `<label>Full name, as on your ID card <input name="legal_name" required maxlength="120" autocomplete="name" value="${attr(values.legal_name ?? '')}"${lockedAttr}></label>
+    ${
+      locked
+        ? ''
+        : `<div class="grid2">
+             <label>T.C. kimlik no <input name="tckn" inputmode="numeric" pattern="[0-9 ]{11,13}" maxlength="13" autocomplete="off" value="${attr(values.tckn ?? '')}"${values.id_given === '1' ? '' : ' required'}>
+               <span class="hint">${values.id_given === '1' ? 'On record. Leave empty unless it has to change.' : 'Checked against the population registry, then only a scrambled fingerprint of it is kept: enough to stop a second account, not enough to read the number.'}</span></label>
+             <label>Year of birth <input name="birth_year" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="bday-year" required value="${attr(values.birth_year ?? '')}"></label>
+           </div>`
+    }
     <label>City you work in <input name="city" required maxlength="40" autocomplete="address-level1" value="${attr(values.city ?? '')}"${lockedAttr}></label>
     <label>Mobile number <input name="phone" type="tel" required maxlength="20" autocomplete="tel" inputmode="tel" value="${attr(values.phone ?? '')}"></label>
     <label>IBAN in your own name <input name="iban" required maxlength="40" autocomplete="off" spellcheck="false" value="${attr(values.iban ?? '')}"></label>
@@ -206,6 +215,8 @@ export const profileValues = (p: AgentProfile): Record<string, string> => ({
   iban: p.iban ?? '',
   tax_profile: p.tax_profile,
   vkn: p.vkn ?? '',
+  birth_year: p.birth_year ? String(p.birth_year) : '',
+  id_given: p.id_given ? '1' : '',
 });
 
 export function apply(
@@ -214,31 +225,72 @@ export function apply(
   values: Record<string, string>,
   errorText: string | null,
   noticeText: string | null,
+  /** The address a code was just mailed to, while the agent types the code. */
+  pendingEmail: string | null = null,
 ): string {
-  const complete = Boolean(profile.legal_name && profile.city && profile.phone && profile.iban);
+  const hasEmail = Boolean(profile.email);
+  const hasDetails = Boolean(
+    profile.legal_name && profile.city && profile.phone && profile.iban && profile.id_given,
+  );
+  // The step's number is drawn by the stylesheet (a counter), so the heading is only its words.
+  const step = (title: string, done: boolean, body: string) =>
+    `<section class="step${done ? ' done' : ''}">
+       <h2>${title}</h2>
+       ${done ? '<p><span class="status active">Done</span></p>' : ''}
+       ${body}
+     </section>`;
+  const email = hasEmail
+    ? `<p>${data(profile.email ?? '')}</p>`
+    : pendingEmail
+      ? `<p>We sent a six-digit code to ${data(pendingEmail)}.</p>
+         <form method="post" action="/apply/email/confirm" class="stack">
+           <input type="hidden" name="email" value="${attr(pendingEmail)}">
+           <label>Code <input name="code" required inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" autocomplete="one-time-code" autofocus></label>
+           <div><button type="submit">Confirm</button></div>
+         </form>
+         <form method="post" action="/apply/email" class="actions">
+           <input type="hidden" name="email" value="${attr(pendingEmail)}">
+           <button class="link" type="submit">Send a new code</button>
+           <a href="/apply">Use another address</a>
+         </form>`
+      : `<p class="hint">We write to you here about your application and your payments.</p>
+         <form method="post" action="/apply/email" class="stack">
+           <label>Email address <input name="email" type="email" required maxlength="254" autocomplete="email"></label>
+           <div><button type="submit">Send me a code</button></div>
+         </form>`;
   return layout(
     'Join',
     nav,
     `${notice(noticeText)}<h1>Become an agent</h1>
-     <p class="lede">Three steps: tell us who you are, accept the rules, and we check your identity in a short video call.</p>
+     <p class="lede">Four steps here, then a short video call with your ID card. One person, one account.</p>
      ${error(errorText)}
-     <h2>1. About you</h2>
-     <form method="post" action="/apply/profile" class="stack">
-       ${profileFields(values, false)}
-       <div><button type="submit">Save</button></div>
-     </form>
-     <h2>2. The rules</h2>
-     ${rulesList()}
-     <h2>3. Ask for the identity check</h2>
-     ${
-       complete
+     ${step('Your email address', hasEmail, email)}
+     ${step(
+       'About you',
+       hasDetails,
+       `<form method="post" action="/apply/profile" class="stack">
+          ${profileFields(values, false)}
+          <div><button type="submit"${hasDetails ? ' class="secondary"' : ''}>Save</button></div>
+        </form>`,
+     )}
+     ${step('The rules', false, rulesList())}
+     ${step(
+       'Send your application',
+       false,
+       hasEmail && hasDetails
          ? `<form method="post" action="/apply/submit" class="stack">
              <input type="hidden" name="terms" value="${attr(profile.current_terms)}">
              <label class="check"><input type="checkbox" name="accept" value="1" required> I have read the rules for agents and accept them, and the agent agreement.</label>
              <div><button type="submit">Send my application</button></div>
            </form>`
-         : '<p class="panel">Save your details first.</p>'
-     }`,
+         : `<p class="panel">${hasEmail ? 'Save your details first.' : 'Confirm your email address and save your details first.'}</p>`,
+     )}
+     <h2>What happens next</h2>
+     <ol class="rules">
+       <li>We call you on a video call. Have your Turkish ID card with you: we compare it with what you entered. We keep no picture of it.</li>
+       <li>We check that the IBAN is in your own name.</li>
+       <li>Then your account is active and you can look for vehicles.</li>
+     </ol>`,
   );
 }
 
@@ -559,6 +611,7 @@ export function account(
     `${notice(noticeText)}<h1>Your details</h1>
      <div class="panel"><dl class="facts">
        <dt>Status</dt><dd>${STATUS_TEXT[profile.status]}</dd>
+       <dt>Email</dt><dd>${profile.email ? data(profile.email) : '—'}</dd>
        <dt>IBAN</dt><dd>${profile.iban_verified ? 'Checked' : 'Not checked yet'}</dd>
        <dt>Strikes</dt><dd translate="no">${String(profile.strikes)}</dd>
      </dl></div>

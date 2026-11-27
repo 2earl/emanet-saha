@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { routePath } from 'hono/route';
 import {
   SESSION_ABSOLUTE_SECONDS,
   SIGNIN_TTL_SECONDS,
@@ -51,6 +52,19 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_vkn: 'Enter your tax number (VKN): 10 digits, or 11 for a person.',
   profile_locked: 'Your name, city and tax details were checked. Contact 2earl to change them.',
   profile_incomplete: 'Fill in and save your details first.',
+  invalid_tckn: 'Enter your T.C. kimlik no: 11 digits, as on your ID card.',
+  invalid_birth_year: 'Enter the year you were born. Agents are 18 or older.',
+  tckn_taken: 'This ID number already has an Emanet Saha account. One person, one account.',
+  phone_taken: 'This mobile number belongs to another agent’s account.',
+  identity_not_confirmed:
+    'The population registry doesn’t know this ID number with this name and birth year. Check all three: the name exactly as on your ID card.',
+  invalid_email: 'That isn’t an email address.',
+  email_taken: 'This email address belongs to another agent’s account.',
+  sent_recently: 'We sent a code less than a minute ago. Check your inbox, then try again.',
+  email_not_sent: 'The email didn’t go out. Try again in a moment.',
+  wrong_code: 'That isn’t the code we sent. Check it and try again.',
+  code_expired: 'This code is no longer valid. Ask for a new one.',
+  email_not_verified: 'Confirm your email address first.',
   already_submitted: 'Your application is already sent.',
   terms_changed: 'The rules have changed. Read them again and accept them.',
   no_payout_rule: 'Vehicles can’t be shown right now. Try again later.',
@@ -75,6 +89,8 @@ const errorText = (error: string) => ERROR_TEXT[error] ?? 'That didn’t work. T
 
 const DONE: Record<string, string> = {
   saved: 'Saved.',
+  code_sent: 'We sent a six-digit code. It is valid for 15 minutes.',
+  email_confirmed: 'Email address confirmed.',
   submitted: 'Sent. We’ll call you for the identity check.',
   released: 'Given up. Someone else can look for it now.',
   uploaded: 'Uploaded.',
@@ -96,6 +112,43 @@ const homeFor = (agent: AgentProfile) =>
 
 export function createApp(now: () => number) {
   const app = new Hono<AppEnv>();
+
+  // One line per request for Cloudflare's logs: the route's pattern (never the address itself,
+  // which carries IDs), the status and how long it took.
+  app.use('*', async (c: AppContext, next) => {
+    const started = Date.now();
+    await next();
+    console.log(
+      JSON.stringify({
+        level: c.res.status >= 500 ? 'error' : 'info',
+        event: 'request',
+        route: `${c.req.method} ${routePath(c)}`,
+        status: c.res.status,
+        ms: Date.now() - started,
+      }),
+    );
+  });
+
+  // Anything unexpected: the person gets a page that says so, and the core is told the route and
+  // the error's name (for the System page in Emanet Merkez and the alert email). Never the data.
+  app.onError(async (error, c) => {
+    const route = `${c.req.method} ${routePath(c)}`;
+    const name = error instanceof Error ? error.name : 'error';
+    console.error(JSON.stringify({ level: 'error', event: 'request.failed', route, error: name }));
+    try {
+      await core(c.env).reportError(route, name);
+    } catch {
+      // The core itself may be what failed; the log line above stands.
+    }
+    return c.html(
+      pages.problem(
+        { signedIn: false },
+        'Something went wrong',
+        'That didn’t work, and 2earl has been told. Try again in a moment.',
+      ),
+      500,
+    );
+  });
 
   // Language: ?lang= (remembered), the cookie, then the browser's.
   app.use('*', async (c: AppContext, next) => {
@@ -162,7 +215,7 @@ export function createApp(now: () => number) {
    * and stored before the core has its say; addresses are debtors' homes, and every look is
    * logged. Neither needs to happen more than a few times a minute.
    */
-  const tooFast = async (c: AppContext, what: 'upload' | 'places') => {
+  const tooFast = async (c: AppContext, what: 'upload' | 'places' | 'email') => {
     const { success } = await c.env.FORM_RATE_LIMITER.limit({ key: `${what}:${uid(c)}` });
     return success
       ? null
@@ -293,18 +346,79 @@ export function createApp(now: () => number) {
       ? v.tax_profile
       : 'individual') as TaxProfile,
     vkn: v.vkn ? v.vkn : null,
+    tckn: v.tckn ? v.tckn : null,
+    birthYear: /^\d{4}$/.test(v.birth_year ?? '') ? Number(v.birth_year) : null,
   });
+
+  const applyPage = (
+    c: AppContext,
+    values: Record<string, string>,
+    errorText: string | null,
+    pendingEmail: string | null = null,
+  ) =>
+    pages.apply(
+      nav(c),
+      agent(c),
+      values,
+      errorText,
+      done(c),
+      pendingEmail ?? (c.req.query('code') === '1' ? text(c.req.query('email')) : null),
+    );
 
   app.get('/apply', (c) => {
     if (agent(c).status !== 'applied') return c.redirect(homeFor(agent(c)), 302);
-    return c.html(pages.apply(nav(c), agent(c), pages.profileValues(agent(c)), null, done(c)));
+    return c.html(applyPage(c, pages.profileValues(agent(c)), null));
+  });
+
+  // Step 1: an email address, proved with a code we mail to it.
+  app.post('/apply/email', async (c) => {
+    const limited = await tooFast(c, 'email');
+    if (limited) return limited;
+    const v = await formValues(c);
+    const result = await core(c.env).requestEmailCode(uid(c), {
+      email: v.email ?? '',
+      locale: c.get('locale') === 'en' ? 'en' : 'tr',
+    });
+    if (!result.ok) {
+      return c.html(
+        applyPage(
+          c,
+          pages.profileValues(agent(c)),
+          errorText(result.error),
+          result.error === 'sent_recently' ? (v.email ?? '') : null,
+        ),
+        422,
+      );
+    }
+    return c.redirect(
+      `/apply?done=code_sent&code=1&email=${encodeURIComponent(result.value.email)}`,
+      303,
+    );
+  });
+
+  app.post('/apply/email/confirm', async (c) => {
+    const limited = await tooFast(c, 'email');
+    if (limited) return limited;
+    const v = await formValues(c);
+    const result = await core(c.env).confirmEmailCode(uid(c), v.code ?? '');
+    if (!result.ok) {
+      return c.html(
+        applyPage(
+          c,
+          pages.profileValues(agent(c)),
+          errorText(result.error),
+          result.error === 'wrong_code' ? (v.email ?? '') : null,
+        ),
+        422,
+      );
+    }
+    return c.redirect('/apply?done=email_confirmed', 303);
   });
 
   app.post('/apply/profile', async (c) => {
     const v = await formValues(c);
     const result = await core(c.env).updateProfile(uid(c), profileInput(v));
-    if (!result.ok)
-      return c.html(pages.apply(nav(c), agent(c), v, errorText(result.error), null), 422);
+    if (!result.ok) return c.html(applyPage(c, v, errorText(result.error)), 422);
     return c.redirect('/apply?done=saved', 303);
   });
 
@@ -312,22 +426,13 @@ export function createApp(now: () => number) {
     const v = await formValues(c);
     if (v.accept !== '1') {
       return c.html(
-        pages.apply(
-          nav(c),
-          agent(c),
-          pages.profileValues(agent(c)),
-          'Accept the rules to continue.',
-          null,
-        ),
+        applyPage(c, pages.profileValues(agent(c)), 'Accept the rules to continue.'),
         422,
       );
     }
     const result = await core(c.env).submit(uid(c), v.terms ?? '');
     if (!result.ok) {
-      return c.html(
-        pages.apply(nav(c), agent(c), pages.profileValues(agent(c)), errorText(result.error), null),
-        422,
-      );
+      return c.html(applyPage(c, pages.profileValues(agent(c)), errorText(result.error)), 422);
     }
     return c.redirect('/status?done=submitted', 303);
   });

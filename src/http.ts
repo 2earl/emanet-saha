@@ -79,6 +79,7 @@ export const CSP = [
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self'",
+  "font-src 'self'",
   "manifest-src 'self'",
   "form-action 'self' https://login.2earl.com",
   "frame-ancestors 'none'",
