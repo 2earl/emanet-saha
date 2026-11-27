@@ -8,7 +8,26 @@ import { readExif, type PhotoFacts } from './exif';
  */
 
 export const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
-const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+
+/**
+ * What a photo is, from its first bytes: the browser's word for it is only a hint, and staff open
+ * these files in Emanet Merkez.
+ */
+export function photoType(bytes: Uint8Array): string | null {
+  const at = (offset: number, ...sig: number[]) => sig.every((b, i) => bytes[offset + i] === b);
+  const ascii = (offset: number, text: string) =>
+    Array.from(text).every((ch, i) => bytes[offset + i] === ch.charCodeAt(0));
+  if (at(0, 0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  if (ascii(0, 'RIFF') && ascii(8, 'WEBP')) return 'image/webp';
+  // ISO BMFF: "ftyp" at 4, then the brand.
+  if (ascii(4, 'ftyp')) {
+    const brand = String.fromCharCode(...bytes.slice(8, 12));
+    if (['heic', 'heix', 'hevc', 'heim', 'heis'].includes(brand)) return 'image/heic';
+    if (['mif1', 'msf1'].includes(brand)) return 'image/heif';
+  }
+  return null;
+}
 
 export type Photo = { bytes: Uint8Array; type: string; facts: PhotoFacts };
 
@@ -16,9 +35,9 @@ export type Photo = { bytes: Uint8Array; type: string; facts: PhotoFacts };
 export async function readPhoto(value: unknown): Promise<Result<Photo>> {
   if (!(value instanceof File) || value.size === 0) return { ok: false, error: 'no_photo' };
   if (value.size > MAX_PHOTO_BYTES) return { ok: false, error: 'photo_too_large' };
-  const type = value.type.toLowerCase();
-  if (!PHOTO_TYPES.has(type)) return { ok: false, error: 'not_a_photo' };
   const bytes = new Uint8Array(await value.arrayBuffer());
+  const type = photoType(bytes);
+  if (!type) return { ok: false, error: 'not_a_photo' };
   return { ok: true, value: { bytes, type, facts: readExif(bytes) } };
 }
 

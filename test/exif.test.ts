@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { photoType } from '../src/evidence';
 import { readExif } from '../src/exif';
 import { jpegWithExif } from './jpeg';
 
@@ -32,5 +33,18 @@ describe('photo facts', () => {
     expect(readExif(new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0, 2]))).toEqual({});
     expect(readExif(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toEqual({});
     expect(readExif(new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 1, 2]))).toEqual({});
+  });
+});
+
+describe('photoType', () => {
+  it('knows a photo by its bytes, not its name', () => {
+    const bytes = (...b: number[]) => new Uint8Array(b);
+    const text = (t: string) => new TextEncoder().encode(t);
+    expect(photoType(bytes(0xff, 0xd8, 0xff, 0xe1))).toBe('image/jpeg');
+    expect(photoType(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))).toBe('image/png');
+    expect(photoType(text('RIFF\0\0\0\0WEBPVP8 '))).toBe('image/webp');
+    expect(photoType(text('\0\0\0\x18ftypheic'))).toBe('image/heic');
+    expect(photoType(text('<html><script>alert(1)</script>'))).toBeNull();
+    expect(photoType(text('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBeNull();
   });
 });
