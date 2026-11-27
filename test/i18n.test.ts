@@ -67,6 +67,10 @@ describe('Turkish', () => {
     await get(`/claims/${id}`, agent);
     await get(`/claims/${id}/found`, agent);
     await sendFile(`/claims/${id}/found`, agent, {}, 1);
+    await coreHooks().testRefuseNextPhoto();
+    await sendFile(`/claims/${id}/found`, agent, { lat: '38.4', lng: '27.1' }, 9);
+    await get(`/claims/${id}`, agent);
+    await sendFile(`/claims/${id}/evidence`, agent, { kind: 'scene' }, 8);
     await sendFile(`/claims/${id}/found`, agent, { lat: '38.4', lng: '27.1' }, 2);
     await get(`/claims/${id}/call`, agent);
     await get(`/claims/${id}`, agent);
@@ -87,6 +91,8 @@ describe('Turkish', () => {
     await get('/account?done=saved', agent);
 
     const other = await signIn('active-2');
+    await coreHooks().testReject(id, 'Plaka farklı');
+    await get('/claims', agent);
     await get('/claims', other);
     await get('/earnings', other);
     await coreHooks().testReset();

@@ -199,6 +199,46 @@ describe('finding a vehicle', () => {
     ).toBe(422);
   });
 
+  it('asks again for the scene photo when the sighting’s own wasn’t stored', async () => {
+    const cookie = await signIn('active-1');
+    const id = await claimed(cookie);
+    await coreHooks().testRefuseNextPhoto();
+    const refused = await upload(
+      `/claims/${id}/found`,
+      cookie,
+      { lat: '38.4', lng: '27.1' },
+      { photo: photo(20) },
+    );
+    expect(refused.status).toBe(422);
+    // The sighting stands, so the claim is reporting, without a scene photo.
+    const page = await (await request(`/claims/${id}`, { headers: { Cookie: cookie } })).text();
+    expect(page).toContain('The photo of the vehicle where you found it is missing');
+    expect(page).toContain('name="kind" value="scene"');
+    const scene = await upload(
+      `/claims/${id}/evidence`,
+      cookie,
+      { kind: 'scene' },
+      { photo: photo(21) },
+    );
+    expect(scene.headers.get('Location')).toBe(`/claims/${id}?done=uploaded`);
+    const after = await (await request(`/claims/${id}`, { headers: { Cookie: cookie } })).text();
+    expect(after).not.toContain('is missing');
+    // Once it is there, a second one is refused.
+    expect(
+      (await upload(`/claims/${id}/evidence`, cookie, { kind: 'scene' }, { photo: photo(22) }))
+        .status,
+    ).toBe(422);
+  });
+
+  it('tells the agent why a delivery wasn’t accepted', async () => {
+    const cookie = await signIn('active-1');
+    const id = await claimed(cookie);
+    await coreHooks().testReject(id, 'The receipt shows another plate');
+    const list = await (await request('/claims', { headers: { Cookie: cookie } })).text();
+    expect(list).toContain('Not accepted');
+    expect(list).toContain('The receipt shows another plate');
+  });
+
   it('gives a vehicle up', async () => {
     const cookie = await signIn('active-1');
     const id = await claimed(cookie);

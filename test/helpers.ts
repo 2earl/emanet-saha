@@ -87,6 +87,8 @@ export function upload(
 interface CoreTestHooks {
   testCalls(): Promise<unknown[][]>;
   testReset(): Promise<void>;
+  testRefuseNextPhoto(): Promise<void>;
+  testReject(claimId: string, note: string): Promise<void>;
 }
 export const coreHooks = () => env.CORE as unknown as CoreTestHooks;
 
