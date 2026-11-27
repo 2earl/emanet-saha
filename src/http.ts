@@ -55,10 +55,19 @@ export async function underRateLimit(c: AppContext, route: string): Promise<bool
 
 /** Only paths on this site, never another origin or a protocol-relative URL. */
 export function safeReturnTo(value: string | undefined | null): string | null {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
+  if (!value || value.length > 512 || !value.startsWith('/') || value.startsWith('//')) return null;
+  // Browsers drop tabs and newlines from a URL, so "/\t/evil.example" would become
+  // "//evil.example": no backslash, whitespace or control character in a local path.
+  // eslint-disable-next-line no-control-regex
+  if (/[\\\s\u0000-\u001f\u007f]/.test(value)) return null;
+  const base = 'https://return-to.invalid';
+  let url: URL;
+  try {
+    url = new URL(value, base);
+  } catch {
     return null;
   }
-  return value.length > 512 ? null : value;
+  return url.origin === base ? `${url.pathname}${url.search}` : null;
 }
 
 /**
