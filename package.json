@@ -2,7 +2,7 @@
   "name": "@2earl/emanet-saha",
   "version": "0.0.0",
   "private": true,
-  "description": "Emanet Saha at emanet-saha.2earl.com: the app for verified field agents who find vehicles with seizure orders and report them to the police.",
+  "description": "Emanet Saha at saha.emanet.dev: the app for verified field agents who find vehicles with seizure orders and report them to the police.",
   "license": "UNLICENSED",
   "type": "module",
   "packageManager": "pnpm@10.28.0",

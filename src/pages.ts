@@ -33,6 +33,8 @@ const MARK =
   '<path fill="#F7931E" d="M100 0 50 50V100L100 50Z"/>' +
   '<path fill="#ED1C24" d="M0 50 50 100H15A15 15 0 0 1 0 85Z"/>' +
   '<path fill="#FBB03B" d="M100 50V85A15 15 0 0 1 85 100H50Z"/>' +
+  // Emanet: the 2earl hands holding something entrusted to them.
+  '<path fill="#ED1C24" d="M50 7 66 23 50 39 34 23Z"/>' +
   '</svg>';
 
 export type Section = 'hunts' | 'claims' | 'earnings' | 'account';
@@ -94,17 +96,18 @@ function layout(title: string, nav: Nav, body: string, options: { script?: boole
 ${options.script ? '<script src="/app.js" defer></script>' : ''}
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="bar">
   <a class="brand" href="/">${MARK}<span translate="no">Emanet Saha</span></a>
   ${who}
   ${sections}
 </header>
-<main>
+<main id="main">
 ${body}
 </main>
 <footer>
   <span>Emanet finds vehicles and tells the police. Agents never touch, tow or follow anyone.</span>
-  <a href="/terms">Rules for agents</a>
+  <span><a href="/terms">Rules for agents</a> · <a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
   ${languageSwitcher()}
 </footer>
 </body>
@@ -337,10 +340,21 @@ export const STEPS: readonly {
   },
 ];
 
+/**
+ * The camera button: the browser's own file control reads "Choose File" in English on most
+ * phones, so it hides behind a button in the page's language; app.js shows the chosen photo's
+ * name.
+ */
+function photoInput(label: string): string {
+  return `<div class="photo-field"><span class="label">${label}</span>
+    <label class="camera"><input type="file" name="photo" accept="image/*" capture="environment" required data-photo><span class="button secondary">Take a photo</span></label>
+    <span class="hint" data-photo-name hidden></span></div>`;
+}
+
 function uploadForm(claimId: string, kind: EvidenceKind, label: string): string {
   return `<form method="post" action="/claims/${attr(claimId)}/evidence" enctype="multipart/form-data" class="stack upload">
     <input type="hidden" name="kind" value="${kind}">
-    <label>${label} <input type="file" name="photo" accept="image/*" capture="environment" required></label>
+    ${photoInput(label)}
     <div><button type="submit">Upload</button></div>
   </form>`;
 }
@@ -423,7 +437,7 @@ export function found(nav: Nav, d: ClaimDetails, errorText: string | null): stri
      ${error(errorText)}
      <form method="post" action="/claims/${attr(d.claim.id)}/found" enctype="multipart/form-data" class="stack" id="sighting">
        <input type="hidden" name="lat"><input type="hidden" name="lng"><input type="hidden" name="accuracy"><input type="hidden" name="taken_at">
-       <label>Photo of the vehicle <input type="file" name="photo" accept="image/*" capture="environment" required></label>
+       ${photoInput('Photo of the vehicle')}
        <p class="hint" data-location>Finding your location…</p>
        <div><button type="submit">Send and call the police</button></div>
      </form>
