@@ -64,7 +64,8 @@ function agentFor(id) {
     if (status === null) return null;
     s.agents.set(id, { status, legal_name: 'Ayşe Yılmaz', city: 'İzmir', phone: '+905321234567',
       iban: 'TR330006100519786457841326', iban_verified: status === 'active', tax_profile: 'individual',
-      vkn: null, terms_version: TERMS, current_terms: TERMS, submitted_at: now() - 60, strikes: 0, open_claims: 0 });
+      vkn: null, terms_version: TERMS, current_terms: TERMS, submitted_at: now() - 60, strikes: 0, open_claims: 0,
+      email: 'ayse@example.com', id_given: true, birth_year: 1990 });
   }
   return s.agents.get(id);
 }
@@ -73,7 +74,7 @@ export class FieldApi extends WorkerEntrypoint {
     log('register', [id]);
     if (!agentFor(id)) s.agents.set(id, { status: 'applied', legal_name: null, city: null, phone: null, iban: null,
       iban_verified: false, tax_profile: 'individual', vkn: null, terms_version: null, current_terms: TERMS,
-      submitted_at: null, strikes: 0, open_claims: 0 });
+      submitted_at: null, strikes: 0, open_claims: 0, email: null, id_given: false, birth_year: null });
     return ok(null);
   }
   async profile(id) { const a = agentFor(id); return a ? ok({ ...a }) : fail('not_found'); }
@@ -82,15 +83,34 @@ export class FieldApi extends WorkerEntrypoint {
     const a = agentFor(id);
     if (!/^TR\\d{24}$/.test(input.iban.replace(/\\s/g, ''))) return fail('invalid_iban');
     if (a.status === 'active' && input.legalName !== a.legal_name) return fail('profile_locked');
+    if (!a.id_given && !input.tckn) return fail('invalid_tckn');
+    if (input.tckn === '10000000146') return fail('tckn_taken');
+    if (input.tckn) { a.id_given = true; a.birth_year = input.birthYear; }
     Object.assign(a, { legal_name: input.legalName, city: input.city, phone: input.phone,
       iban: input.iban.replace(/\\s/g, ''), tax_profile: input.taxProfile, vkn: input.vkn ?? null });
     return ok(null);
   }
+  async requestEmailCode(id, input) {
+    log('requestEmailCode', [id, input]);
+    if (!input.email.includes('@')) return fail('invalid_email');
+    if (input.email === 'taken@example.com') return fail('email_taken');
+    s.pending = { id, email: input.email.toLowerCase() };
+    return ok({ email: s.pending.email });
+  }
+  async confirmEmailCode(id, code) {
+    log('confirmEmailCode', [id, code]);
+    if (!s.pending || s.pending.id !== id) return fail('code_expired');
+    if (code !== '123456') return fail('wrong_code');
+    agentFor(id).email = s.pending.email;
+    return ok({ email: s.pending.email });
+  }
+  async reportError(event, detail) { log('reportError', [event, detail]); }
   async submit(id, terms) {
     log('submit', [id, terms]);
     const a = agentFor(id);
     if (terms !== TERMS) return fail('terms_changed');
     if (!a.legal_name) return fail('profile_incomplete');
+    if (!a.email) return fail('email_not_verified');
     a.status = 'kyc_pending';
     return ok(null);
   }

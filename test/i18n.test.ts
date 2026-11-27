@@ -38,15 +38,27 @@ describe('Turkish', () => {
 
     const fresh = await signIn('new-1');
     await get('/apply', fresh);
-    for (const iban of ['TR12', 'TR330006100519786457841326']) {
-      await send('/apply/profile', fresh, {
-        legal_name: 'Ayşe Yılmaz',
-        city: 'İzmir',
-        phone: '05321234567',
-        iban,
-        tax_profile: 'individual',
-      });
-    }
+    const details = {
+      legal_name: 'Ayşe Yılmaz',
+      city: 'İzmir',
+      phone: '05321234567',
+      iban: 'TR330006100519786457841326',
+      tax_profile: 'individual',
+      birth_year: '1990',
+    };
+    await send('/apply/profile', fresh, { ...details, iban: 'TR12', tckn: '10000000078' });
+    await send('/apply/profile', fresh, details);
+    await send('/apply/profile', fresh, { ...details, tckn: '10000000146' });
+    await send('/apply/profile', fresh, { ...details, tckn: '10000000078' });
+    await get('/apply', fresh);
+    await send('/apply/submit', fresh, { terms: '2026-11-27', accept: '1' });
+    await send('/apply/email', fresh, { email: 'nope' });
+    await send('/apply/email', fresh, { email: 'taken@example.com' });
+    await send('/apply/email', fresh, { email: 'ayse@example.com' });
+    await get('/apply?done=code_sent&code=1&email=ayse%40example.com', fresh);
+    await send('/apply/email/confirm', fresh, { code: '000000', email: 'ayse@example.com' });
+    await send('/apply/email/confirm', fresh, { code: '123456' });
+    await get('/apply?done=email_confirmed', fresh);
     await get('/apply', fresh);
     await get('/apply?done=saved', fresh);
     await send('/apply/submit', fresh, { terms: '2026-11-27' });

@@ -271,5 +271,65 @@ export const tr: Catalog = {
     'This vehicle already has as many photos as it can hold.':
       'Bu araç için yüklenebilecek fotoğraf sayısına ulaşıldı.',
     'Choose which document the photo shows.': 'Fotoğrafın hangi belgeye ait olduğunu seçin.',
+    'Something went wrong': 'Bir sorun oluştu',
+    'That didn’t work, and 2earl has been told. Try again in a moment.':
+      'İşlem tamamlanamadı; 2earl’e bildirildi. Biraz sonra yeniden deneyin.',
+    'Checked against the population registry, then only a scrambled fingerprint of it is kept: enough to stop a second account, not enough to read the number.':
+      'Nüfus kaydıyla karşılaştırılır; ardından yalnızca şifrelenmiş bir özeti saklanır: ikinci bir hesabı engellemeye yeter, numarayı okumaya yetmez.',
+    Code: 'Kod',
+    Confirm: 'Onayla',
+    'Confirm your email address and save your details first.':
+      'Önce e-posta adresinizi doğrulayın ve bilgilerinizi kaydedin.',
+    'Confirm your email address first.': 'Önce e-posta adresinizi doğrulayın.',
+    Done: 'Tamam',
+    Email: 'E-posta',
+    'Email address': 'E-posta adresi',
+    'Email address confirmed.': 'E-posta adresi doğrulandı.',
+    'Enter your T.C. kimlik no: 11 digits, as on your ID card.':
+      'T.C. kimlik numaranızı girin: kimlik kartınızdaki 11 hane.',
+    'Enter the year you were born. Agents are 18 or older.':
+      'Doğum yılınızı girin. Saha ajanları 18 yaşından büyük olmalıdır.',
+    'Four steps here, then a short video call with your ID card. One person, one account.':
+      'Burada dört adım, ardından kimlik kartınızla kısa bir görüntülü görüşme. Bir kişi, bir hesap.',
+    'On record. Leave empty unless it has to change.':
+      'Kayıtlı. Değişmesi gerekmiyorsa boş bırakın.',
+    'Send a new code': 'Yeni kod gönder',
+    'Send me a code': 'Bana kod gönder',
+    'T.C. kimlik no': 'T.C. kimlik no',
+    'That isn’t an email address.': 'Bu bir e-posta adresi değil.',
+    'That isn’t the code we sent. Check it and try again.':
+      'Bu, gönderdiğimiz kod değil. Kontrol edip yeniden deneyin.',
+    'This code is no longer valid. Ask for a new one.':
+      'Bu kod artık geçerli değil. Yeni bir kod isteyin.',
+    'We sent a code less than a minute ago. Check your inbox, then try again.':
+      'Bir dakikadan kısa süre önce kod gönderdik. Gelen kutunuzu kontrol edin, sonra yeniden deneyin.',
+    'The email didn’t go out. Try again in a moment.':
+      'E-posta gönderilemedi. Biraz sonra yeniden deneyin.',
+    'Then your account is active and you can look for vehicles.':
+      'Ardından hesabınız etkinleşir ve araç aramaya başlayabilirsiniz.',
+    'This ID number already has an Emanet Saha account. One person, one account.':
+      'Bu kimlik numarasıyla açılmış bir Emanet Saha hesabı var. Bir kişi, bir hesap.',
+    'This mobile number belongs to another agent’s account.':
+      'Bu cep telefonu numarası başka bir saha ajanının hesabına ait.',
+    'The population registry doesn’t know this ID number with this name and birth year. Check all three: the name exactly as on your ID card.':
+      'Nüfus kaydında bu kimlik numarası, bu ad ve doğum yılıyla eşleşmiyor. Üçünü de kontrol edin: ad, kimlik kartınızdaki ile birebir aynı olmalı.',
+    'This email address belongs to another agent’s account.':
+      'Bu e-posta adresi başka bir saha ajanının hesabına ait.',
+    'Use another address': 'Başka bir adres kullan',
+    'We call you on a video call. Have your Turkish ID card with you: we compare it with what you entered. We keep no picture of it.':
+      'Sizi görüntülü arıyoruz. T.C. kimlik kartınız yanınızda olsun: girdiğiniz bilgilerle karşılaştırıyoruz. Kartın görüntüsünü saklamıyoruz.',
+    'We check that the IBAN is in your own name.':
+      'IBAN’ın sizin adınıza olduğunu kontrol ediyoruz.',
+    'We sent a six-digit code to <0/>.': '<0/> adresine altı haneli bir kod gönderdik.',
+    'We sent a six-digit code. It is valid for 15 minutes.':
+      'Altı haneli bir kod gönderdik. 15 dakika geçerlidir.',
+    'We write to you here about your application and your payments.':
+      'Başvurunuz ve ödemeleriniz hakkında size buradan yazarız.',
+    'What happens next': 'Bundan sonra',
+    'Year of birth': 'Doğum yılı',
+    'About you': 'Hakkınızda',
+    'The rules': 'Kurallar',
+    'Your email address': 'E-posta adresiniz',
+    'Send your application': 'Başvurunuzu gönderin',
   },
 };

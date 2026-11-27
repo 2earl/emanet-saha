@@ -57,24 +57,61 @@ describe('joining', () => {
       '/apply',
     );
     const page = await (await request('/apply', { headers: { Cookie: cookie } })).text();
-    expect(page).toContain('Save your details first.');
-    const bad = await post('/apply/profile', cookie, {
-      legal_name: 'Ayşe Yılmaz',
-      city: 'İzmir',
-      phone: '05321234567',
-      iban: 'TR12',
-      tax_profile: 'individual',
+    expect(page).toContain('Confirm your email address and save your details first.');
+    // Step 1: the email address, proved with a code.
+    expect((await post('/apply/email', cookie, { email: 'nope' })).status).toBe(422);
+    const taken = await post('/apply/email', cookie, { email: 'taken@example.com' });
+    expect(await taken.text()).toContain('belongs to another agent');
+    const asked = await post('/apply/email', cookie, { email: 'Ayse@Example.com' });
+    expect(asked.headers.get('Location')).toBe(
+      '/apply?done=code_sent&code=1&email=ayse%40example.com',
+    );
+    expect((await callsOf('requestEmailCode')).at(-1)).toEqual([
+      'new-1',
+      { email: 'Ayse@Example.com', locale: 'en' },
+    ]);
+    const codePage = await (
+      await request(asked.headers.get('Location') ?? '', { headers: { Cookie: cookie } })
+    ).text();
+    expect(codePage).toContain('autocomplete="one-time-code"');
+    const wrong = await post('/apply/email/confirm', cookie, {
+      code: '000000',
+      email: 'ayse@example.com',
     });
-    expect(bad.status).toBe(422);
-    expect(await bad.text()).toContain('IBAN isn’t valid');
-    const saved = await post('/apply/profile', cookie, {
+    expect(wrong.status).toBe(422);
+    expect(await wrong.text()).toContain('isn’t the code we sent');
+    const confirmed = await post('/apply/email/confirm', cookie, { code: '123456' });
+    expect(confirmed.headers.get('Location')).toBe('/apply?done=email_confirmed');
+    // Step 2: details, with the ID number.
+    const details = {
       legal_name: 'Ayşe Yılmaz',
       city: 'İzmir',
       phone: '05321234567',
       iban: 'TR33 0006 1005 1978 6457 8413 26',
       tax_profile: 'individual',
+      birth_year: '1990',
+    };
+    const bad = await post('/apply/profile', cookie, {
+      ...details,
+      iban: 'TR12',
+      tckn: '10000000078',
     });
+    expect(bad.status).toBe(422);
+    expect(await bad.text()).toContain('IBAN isn’t valid');
+    const noId = await post('/apply/profile', cookie, details);
+    expect(await noId.text()).toContain('T.C. kimlik no');
+    const second = await post('/apply/profile', cookie, { ...details, tckn: '10000000146' });
+    expect(await second.text()).toContain('One person, one account');
+    const saved = await post('/apply/profile', cookie, { ...details, tckn: '10000000078' });
     expect(saved.headers.get('Location')).toBe('/apply?done=saved');
+    expect((await callsOf('updateProfile')).at(-1)?.[1]).toMatchObject({
+      tckn: '10000000078',
+      birthYear: 1990,
+    });
+    // The number is never shown again.
+    const after = await (await request('/apply', { headers: { Cookie: cookie } })).text();
+    expect(after).not.toContain('10000000078');
+    expect(after).toContain('On record');
     expect((await post('/apply/submit', cookie, { terms: '2026-11-27' })).status).toBe(422);
     const sent = await post('/apply/submit', cookie, { terms: '2026-11-27', accept: '1' });
     expect(sent.headers.get('Location')).toBe('/status?done=submitted');

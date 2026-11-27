@@ -16,6 +16,11 @@ export interface AgentProfile {
   phone: string | null;
   iban: string | null;
   iban_verified: boolean;
+  /** The address the agent proved with a code, or null. */
+  email?: string | null;
+  /** Whether an ID number is on record (only a keyed hash of it is kept). */
+  id_given?: boolean;
+  birth_year?: number | null;
   tax_profile: TaxProfile;
   vkn: string | null;
   terms_version: string | null;
@@ -32,6 +37,9 @@ export interface ProfileInput {
   iban: string;
   taxProfile: TaxProfile;
   vkn?: string | null;
+  /** T.C. kimlik no: given once; empty afterwards to keep the one on record. */
+  tckn?: string | null;
+  birthYear?: number | null;
 }
 
 export interface Hunt {
@@ -110,9 +118,16 @@ export interface Earnings {
 }
 
 export interface FieldApi {
+  /** An unexpected error: a route pattern and an error's name, for staff's System page. */
+  reportError(event: string, detail: string): Promise<void>;
   register(agentId: string): Promise<Result<null>>;
   profile(agentId: string): Promise<Result<AgentProfile>>;
   updateProfile(agentId: string, input: ProfileInput): Promise<Result<null>>;
+  requestEmailCode(
+    agentId: string,
+    input: { email: string; locale: 'tr' | 'en' },
+  ): Promise<Result<{ email: string }>>;
+  confirmEmailCode(agentId: string, code: string): Promise<Result<{ email: string }>>;
   submit(agentId: string, termsVersion: string): Promise<Result<null>>;
   hunts(agentId: string, query: { city?: string; limit?: number }): Promise<Result<Hunt[]>>;
   claim(agentId: string, vehicleId: string): Promise<Result<Claim>>;

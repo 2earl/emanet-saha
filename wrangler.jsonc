@@ -12,9 +12,14 @@
   "workers_dev": false,
   "preview_urls": false,
 
-  // Invocation logs could record debtors' addresses and agents' locations.
+  // Logs, traces and Issues in Cloudflare (emanet-core docs/DESIGN.md §12). The app logs one
+  // structured line per request: route pattern, status, duration. Never a plate, an address or a
+  // person; invocation logs (full URLs) stay off.
   "observability": {
-    "enabled": false,
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+    "issues": { "enabled": true },
   },
 
   "vars": {

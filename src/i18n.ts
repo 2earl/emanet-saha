@@ -14,6 +14,8 @@ import { tr } from './locales/tr';
 export const LOCALES = ['en', 'tr'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en';
+/** What a visitor who hasn't chosen reads. (DEFAULT_LOCALE is the language pages are written in.) */
+export const FIRST_LOCALE: Locale = 'tr';
 
 /** Each language in its own name, for the language switcher. */
 export const LOCALE_NAMES: Record<Locale, string> = { en: 'English', tr: 'Türkçe' };
@@ -62,7 +64,9 @@ export function fromPreferences(header: string | null | undefined): Locale | nul
 
 /**
  * The request's language: an explicit choice (`?lang=`, OpenID Connect's `ui_locales`), then the
- * remembered choice (cookie), then the account's saved language, then the browser's.
+ * remembered choice (cookie), then the account's saved language. Otherwise Turkish: Emanet is a
+ * Turkish service, and English is there for whoever chooses it. The browser's language isn't
+ * asked: an English-language phone in Turkey is common, an English-reading agent is not.
  */
 export function pickLocale(input: {
   query?: string | null | undefined;
@@ -76,7 +80,7 @@ export function pickLocale(input: {
   if (ui) return ui;
   if (isLocale(input.cookie)) return input.cookie;
   if (isLocale(input.account)) return input.account;
-  return fromPreferences(input.acceptLanguage) ?? DEFAULT_LOCALE;
+  return FIRST_LOCALE;
 }
 
 // ---- The request's language -----------------------------------------------------------------

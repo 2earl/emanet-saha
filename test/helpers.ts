@@ -3,6 +3,16 @@ import { env, exports } from 'cloudflare:workers';
 export const ORIGIN = 'https://saha.emanet.dev';
 const ip = () => `198.51.100.${String(Math.floor(Math.random() * 250))}`;
 
+/**
+ * Pages are Turkish unless the reader chose English. The tests read English (the language the
+ * pages are written in) unless they ask for Turkish with Accept-Language, as before.
+ */
+function readsEnglish(headers: Record<string, string>): Record<string, string> {
+  if ((headers['Accept-Language'] ?? '').startsWith('tr')) return headers;
+  const cookie = headers.Cookie ? `${headers.Cookie}; ` : '';
+  return { ...headers, Cookie: `${cookie}__Host-lang=en` };
+}
+
 export function request(
   path: string,
   init: { method?: string; headers?: Record<string, string>; body?: BodyInit } = {},
@@ -10,7 +20,7 @@ export function request(
   return exports.default.fetch(
     new Request(`${ORIGIN}${path}`, {
       method: init.method ?? 'GET',
-      headers: { 'CF-Connecting-IP': ip(), ...(init.headers ?? {}) },
+      headers: { 'CF-Connecting-IP': ip(), ...readsEnglish(init.headers ?? {}) },
       ...(init.body === undefined ? {} : { body: init.body }),
       redirect: 'manual',
     }),
