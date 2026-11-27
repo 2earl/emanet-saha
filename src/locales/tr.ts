@@ -265,5 +265,11 @@ export const tr: Catalog = {
     'Skip to content': 'İçeriğe geç',
     'Take a photo': 'Fotoğraf çek',
     'Terms of use': 'Kullanım şartları',
+    'The photo of the vehicle where you found it is missing. Take it now, with the plate in view.':
+      'Aracı bulduğunuz yerde çekilmiş fotoğraf eksik. Plaka görünecek şekilde şimdi çekin.',
+    'Why it wasn’t accepted: {0}': 'Kabul edilmeme nedeni: {0}',
+    'This vehicle already has as many photos as it can hold.':
+      'Bu araç için yüklenebilecek fotoğraf sayısına ulaşıldı.',
+    'Choose which document the photo shows.': 'Fotoğrafın hangi belgeye ait olduğunu seçin.',
   },
 };

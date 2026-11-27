@@ -87,6 +87,8 @@ export interface MyClaim {
   expires_at: number;
   closed_at: number | null;
   close_reason: string | null;
+  /** Staff's reason, when a reported delivery wasn't accepted. */
+  close_note?: string | null;
   evidence: EvidenceKind[];
   under_review: boolean;
   payout_status: string | null;

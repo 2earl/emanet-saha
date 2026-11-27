@@ -136,6 +136,7 @@ export class FieldApi extends WorkerEntrypoint {
     const c = s.claims.get(claimId);
     if (!c || c.agent !== id || c.closed_at !== null) return fail('not_found');
     if (c.state !== 'reporting') return fail('no_sighting');
+    if (s.refuseNext) { s.refuseNext = false; return fail('duplicate_photo'); }
     if (s.hashes.has(e.sha256)) return fail('duplicate_photo');
     s.hashes.add(e.sha256);
     c.evidence.push(e.kind);
@@ -144,7 +145,7 @@ export class FieldApi extends WorkerEntrypoint {
   async myClaims(id) {
     return ok([...s.claims.values()].filter((c) => c.agent === id).map((c) => ({
       id: c.id, plate: '35KL789', make: 'Toyota', model: 'Corolla', state: c.state, claimed_at: c.claimed_at,
-      expires_at: c.expires_at, closed_at: c.closed_at, close_reason: c.close_reason, evidence: [...c.evidence],
+      expires_at: c.expires_at, closed_at: c.closed_at, close_reason: c.close_reason, close_note: c.close_note ?? null, evidence: [...c.evidence],
       under_review: c.evidence.includes('yediemin_receipt'), payout_status: null })));
   }
   async earnings(id) {
@@ -154,6 +155,8 @@ export class FieldApi extends WorkerEntrypoint {
   }
   async testCalls() { return s.calls; }
   async testReset() { seed(); }
+  async testRefuseNextPhoto() { s.refuseNext = true; }
+  async testReject(claimId, note) { const c = s.claims.get(claimId); c.closed_at = now(); c.close_reason = 'rejected'; c.close_note = note; }
 }
 export default { fetch() { return new Response(null, { status: 404 }); } };
 `;

@@ -66,6 +66,8 @@ const ERROR_TEXT: Record<string, string> = {
   no_photo: 'Take a photo first.',
   photo_too_large: 'The photo is too large. Take it again at a lower resolution.',
   not_a_photo: 'Upload a photo (JPEG, PNG, WebP or HEIC).',
+  too_much_evidence: 'This vehicle already has as many photos as it can hold.',
+  invalid_kind: 'Choose which document the photo shows.',
   no_location:
     'Your location is needed. Allow location for this site, or take the photo with location on.',
 };
@@ -79,7 +81,9 @@ const DONE: Record<string, string> = {
 };
 const done = (c: AppContext) => DONE[c.req.query('done') ?? ''] ?? null;
 
+/** `scene` here only if the sighting's own photo didn't get stored (pages.claim shows that step). */
 const EVIDENCE_KINDS: EvidenceKind[] = [
+  'scene',
   'tow_report',
   'police_report',
   'yediemin_receipt',
@@ -152,6 +156,17 @@ export function createApp(now: () => number) {
   const unwrap = <T>(result: { ok: true; value: T } | { ok: false; error: string }): T => {
     if (!result.ok) throw new Error(`core: ${result.error}`);
     return result.value;
+  };
+  /**
+   * Per agent, not per address: mobile networks put many phones behind one IP. Photos are large
+   * and stored before the core has its say; addresses are debtors' homes, and every look is
+   * logged. Neither needs to happen more than a few times a minute.
+   */
+  const tooFast = async (c: AppContext, what: 'upload' | 'places') => {
+    const { success } = await c.env.FORM_RATE_LIMITER.limit({ key: `${what}:${uid(c)}` });
+    return success
+      ? null
+      : c.html(pages.problem(nav(c), 'Too many attempts', 'Wait a minute and try again.'), 429);
   };
 
   /** A signed-in agent: registered in the core on first visit, with their profile loaded. */
@@ -369,6 +384,8 @@ export function createApp(now: () => number) {
 
   const showClaim = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {
     const id = c.req.param('id') ?? '';
+    const limited = await tooFast(c, 'places');
+    if (limited) return limited;
     const details = await core(c.env).claimDetails(uid(c), id);
     if (!details.ok) return notFound(c);
     const mine = unwrap(await core(c.env).myClaims(uid(c))).find((m) => m.id === id);
@@ -400,6 +417,8 @@ export function createApp(now: () => number) {
    */
   app.post('/claims/:id/found', async (c) => {
     const id = c.req.param('id');
+    const limited = await tooFast(c, 'upload');
+    if (limited) return limited;
     const details = await core(c.env).claimDetails(uid(c), id);
     if (!details.ok) return notFound(c);
     const fail = (error: string) =>
@@ -439,9 +458,18 @@ export function createApp(now: () => number) {
 
   app.post('/claims/:id/evidence', async (c) => {
     const id = c.req.param('id');
+    const limited = await tooFast(c, 'upload');
+    if (limited) return limited;
     const form = await c.req.parseBody();
     const kind = text(form.kind) as EvidenceKind;
     if (!EVIDENCE_KINDS.includes(kind)) return showClaim(c, errorText('x'), 422);
+    if (kind === 'scene') {
+      // Only to make up for a sighting whose own photo wasn't stored.
+      const mine = unwrap(await core(c.env).myClaims(uid(c))).find((m) => m.id === id);
+      if (!mine || mine.state !== 'reporting' || mine.evidence.includes('scene')) {
+        return showClaim(c, errorText('x'), 422);
+      }
+    }
     const photo = await readPhoto(form.photo);
     if (!photo.ok) return showClaim(c, errorText(photo.error), 422);
     const stored = await storeEvidence(c.env, uid(c), id, kind, photo.value);

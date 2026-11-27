@@ -388,9 +388,15 @@ export function claim(
     })
     .join('');
   const have = new Set(mine?.evidence ?? []);
+  // The sighting was recorded but its photo wasn't stored (a lost connection, a photo used
+  // before): without it staff can't confirm the delivery, so it is asked for again first.
+  const scene =
+    c.state === 'reporting' && mine !== undefined && !have.has('scene')
+      ? `<div class="panel"><p class="error" role="alert">The photo of the vehicle where you found it is missing. Take it now, with the plate in view.</p>${uploadForm(c.id, 'scene', 'Photo of the vehicle')}</div>`
+      : '';
   const steps =
     c.state === 'reporting'
-      ? `<h2>After the police</h2>
+      ? `${scene}<h2>After the police</h2>
          <ol class="steps">${STEPS.map((s) => {
            const done = have.has(s.kind);
            return `<li class="${done ? 'done' : ''}">
@@ -503,6 +509,7 @@ export function claims(nav: Nav, list: MyClaim[], noticeText: string | null): st
       <div class="card-head">${plate(c.plate)}<span class="status${open ? ' active' : ''}">${status}</span></div>
       <p>${data(`${c.make} ${c.model}`)}</p>
       <p class="hint">${open ? `Until ${clock(c.expires_at)}` : `Since ${clock(c.closed_at ?? c.claimed_at)}`}</p>
+      ${!open && c.close_reason === 'rejected' && c.close_note ? `<p class="hint">Why it wasn’t accepted: ${data(c.close_note)}</p>` : ''}
       ${open ? `<p><a href="/claims/${attr(c.id)}">Open</a></p>` : ''}
     </li>`;
   };
