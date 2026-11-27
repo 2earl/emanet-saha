@@ -1,0 +1,706 @@
+/*
+ * Emanet Saha: Emanet's quiet look, for phones in daylight: a dark bar, large type and buttons a
+ * thumb can hit, and the plate as the one strong element.
+ */
+
+:root {
+  --ink: #1b1e23;
+  --muted: #5b6470;
+  --rule: #d9dde2;
+  --paper: #ffffff;
+  --ground: #f3f4f6;
+  --action: #b8321a; /* 2earl vermilion, darkened for white text (AA) */
+  --action-ink: #ffffff;
+  --good: #1f7a4d;
+  --wait: #9a6412;
+  --off: #6b7280;
+  --plate-blue: #003399;
+  --focus: #1a56db;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Noto Sans',
+    sans-serif;
+  color: var(--ink);
+  background: var(--ground);
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
+  background: var(--ink);
+  color: #ffffff;
+  border-bottom: 4px solid var(--action);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.brand svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.bar nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.bar nav a {
+  text-decoration: none;
+  color: #c9ced6;
+}
+
+.bar nav a[aria-current='page'] {
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.bar .who {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #c9ced6;
+}
+
+main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.lede {
+  color: var(--muted);
+  max-width: 44rem;
+  margin: 0 0 1.5rem;
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.25rem;
+}
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.counts a {
+  display: block;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+}
+
+.counts strong {
+  display: block;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.counts span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Turkish number plate: white, black edge, blue TR band. */
+.plate {
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid #111;
+  border-radius: 4px;
+  background: #fff;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.plate::before {
+  content: 'TR';
+  display: flex;
+  align-items: flex-end;
+  padding: 0.35em 0.3em 0.2em;
+  background: var(--plate-blue);
+  color: #fff;
+  font-size: 0.55em;
+  letter-spacing: 0;
+}
+
+.plate span {
+  padding: 0.3em 0.5em;
+}
+
+.plate.large {
+  font-size: 1.6rem;
+}
+
+.status {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.status.active,
+.status.paid,
+.status.approved,
+.status.sent {
+  color: var(--good);
+}
+
+.status.invited,
+.status.applied,
+.status.kyc_pending,
+.status.issued,
+.status.ready,
+.status.awaiting_receipt {
+  color: var(--wait);
+}
+
+.status.suspended,
+.status.banned {
+  color: var(--action);
+}
+
+.status.cancelled {
+  color: var(--off);
+}
+
+dl.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1.5rem;
+  margin: 0;
+}
+
+dl.facts dt {
+  color: var(--muted);
+}
+
+dl.facts dd {
+  margin: 0;
+}
+
+form.stack {
+  display: grid;
+  gap: 1rem;
+  max-width: 44rem;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+label small,
+.hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #b8bec6;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+}
+
+fieldset {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.checks label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-weight: 400;
+}
+
+button,
+.button {
+  font: inherit;
+  font-weight: 600;
+  display: inline-block;
+  padding: 0.55rem 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--action-ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.secondary,
+.button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: #b8bec6;
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.notice,
+.error {
+  border-left: 4px solid var(--good);
+  background: var(--paper);
+  padding: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.error {
+  border-left-color: var(--action);
+}
+
+.secret {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  word-break: break-all;
+  background: var(--ground);
+  padding: 0.5rem;
+  border-radius: 4px;
+  display: block;
+  margin: 0.5rem 0;
+}
+
+footer {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem) 3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.languages {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.languages a[aria-current] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.hero {
+  max-width: 44rem;
+  padding: 3rem 0 1rem;
+}
+
+.hero h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+}
+
+ul.plain {
+  padding-left: 1.1rem;
+}
+
+@media (max-width: 40rem) {
+  table.cases thead {
+    display: none;
+  }
+
+  table.cases tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  table.cases td {
+    border: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* Shared with Emanet Merkez */
+
+.role {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+form.inline {
+  display: inline-flex;
+  align-items: end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+form.inline input,
+form.inline select {
+  width: auto;
+}
+
+.sr {
+  display: contents;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+label.check input {
+  width: auto;
+}
+
+tr.late td {
+  background: #fdf1ee;
+}
+
+tr.retired td {
+  color: var(--off);
+}
+
+tfoot th {
+  border-top: 2px solid var(--ink);
+}
+
+details {
+  margin: 1.25rem 0;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+details[open] summary {
+  margin-bottom: 0.75rem;
+}
+
+ul.evidence {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+ul.evidence li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0.5rem;
+}
+
+ul.evidence img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--ground);
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.grid2 input,
+.grid2 select {
+  width: 100%;
+  min-width: 0;
+}
+
+.panel + form,
+.panel + details {
+  margin-top: 1.5rem;
+}
+
+.panel > h2:first-child {
+  margin-top: 0;
+}
+
+/* Field app */
+
+body {
+  font-size: 1.0625rem;
+}
+
+.bar .who {
+  margin-left: auto;
+}
+
+.bar nav {
+  order: 3;
+  flex-basis: 100%;
+  overflow-x: auto;
+  gap: 1.25rem;
+}
+
+button,
+.button {
+  min-height: 2.75rem;
+}
+
+.counts div {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+.counts div strong {
+  font-size: 1.5rem;
+}
+
+ul.cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.card p {
+  margin: 0.25rem 0;
+}
+
+.card form {
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.card button {
+  width: 100%;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.earn {
+  font-size: 1.25rem;
+}
+
+.confidential {
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0 1rem 1rem;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.watermark {
+  position: absolute;
+  inset: 0;
+  font-size: 0.75rem;
+  line-height: 2.2;
+  color: var(--ink);
+  opacity: 0.07;
+  transform: rotate(-18deg) scale(1.4);
+  pointer-events: none;
+  word-break: break-all;
+}
+
+ul.places {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.place p {
+  margin: 0.25rem 0;
+}
+
+.place .links a {
+  font-weight: 600;
+}
+
+ol.steps {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+ol.steps li.done {
+  color: var(--muted);
+}
+
+ol.rules {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.button.call {
+  display: block;
+  text-align: center;
+  font-size: 1.5rem;
+  padding: 1rem;
+}
+
+.script p {
+  margin: 0.25rem 0;
+}
+
+fieldset {
+  border: 1px solid var(--rule);
+  padding: 0.75rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+input[type='file'] {
+  width: 100%;
+}
+
+@media (max-width: 40rem) {
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}
