@@ -789,7 +789,15 @@ export function createApp(now: () => number) {
   ) => c.html(pages.supportNew(nav(c), values, error), status);
 
   app.get('/support/new', (c) =>
-    newTicket(c, { category: c.req.query('category') ?? 'other' }, null),
+    // `about` is what the question is about (a payment, a vehicle): it starts the subject.
+    newTicket(
+      c,
+      {
+        category: c.req.query('category') ?? 'other',
+        subject: (c.req.query('about') ?? '').trim().slice(0, 80),
+      },
+      null,
+    ),
   );
 
   app.post('/support/new', async (c) => {
