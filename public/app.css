@@ -805,7 +805,7 @@ input[type='file'] {
 }
 
 @media (max-width: 40rem) {
-  table {
+  table:not(.cases) {
     display: block;
     overflow-x: auto;
   }
@@ -3335,4 +3335,27 @@ ul.cards + .error + form {
 
 form.stack + form {
   margin-top: 1rem;
+}
+
+/* On a phone a wide table scrolls inside its own box; the page never scrolls sideways. */
+@media (max-width: 40rem) {
+  table:not(.cases) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* A search: the field and its button on one baseline, clear of what follows. */
+form.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+}
+
+form.search label {
+  flex: 1 1 16rem;
+  max-width: 28rem;
 }
