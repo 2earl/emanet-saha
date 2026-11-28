@@ -107,6 +107,7 @@ describe('joining', () => {
       iban: 'TR33 0006 1005 1978 6457 8413 26',
       tax_profile: 'individual',
       birth_year: '1990',
+      address: 'Örnek Mah. Deneme Sk. No:1 D:2 Karşıyaka İzmir',
     };
     const bad = await post('/apply/profile', cookie, {
       ...details,
@@ -129,9 +130,58 @@ describe('joining', () => {
     const after = await (await request('/apply', { headers: { Cookie: cookie } })).text();
     expect(after).not.toContain('10000000078');
     expect(after).toContain('On record');
+    // Step 3: the two e-Devlet documents, each with its barcode number.
+    expect(after).toContain('Upload both documents first.');
+    const pdf = {
+      bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]),
+      type: 'application/pdf',
+      name: 'a.pdf',
+    };
+    const junk = { bytes: new Uint8Array([1, 2, 3, 4]), type: 'application/pdf', name: 'a.pdf' };
+    const send = (kind: string, file: typeof pdf, barcode: string) =>
+      upload('/apply/documents', cookie, { kind, barcode }, { file });
+    expect((await send('criminal_record', junk, 'ABC-123456')).status).toBe(422);
+    expect((await send('passport', pdf, 'ABC-123456')).status).toBe(422);
+    expect((await send('criminal_record', pdf, '!')).status).toBe(422);
+    expect((await send('criminal_record', pdf, 'ABC-123456')).headers.get('Location')).toBe(
+      '/apply?done=document',
+    );
+    expect((await send('population_record', pdf, 'NVI-987654')).status).toBe(303);
+    expect((await callsOf('addDocument')).at(-1)).toEqual([
+      'new-1',
+      'population_record',
+      'NVI-987654',
+    ]);
+    const ready = await (await request('/apply', { headers: { Cookie: cookie } })).text();
+    expect(ready).toContain('Uploaded, waiting to be checked');
+    expect(ready).toContain('name="consent"');
+    // Step 5: three separate acceptances, or nothing.
     expect((await post('/apply/submit', cookie, { terms: '2026-11-27' })).status).toBe(422);
-    const sent = await post('/apply/submit', cookie, { terms: '2026-11-27', accept: '1' });
+    const partly = await post('/apply/submit', cookie, {
+      terms: '2026-11-27',
+      accept: '1',
+      notice: '1',
+    });
+    expect(partly.status).toBe(422);
+    expect(await partly.text()).toContain('Tick all three boxes');
+    const sent = await post('/apply/submit', cookie, {
+      terms: '2026-11-27',
+      accept: '1',
+      notice: '1',
+      consent: '1',
+    });
     expect(sent.headers.get('Location')).toBe('/status?done=submitted');
+    expect((await callsOf('submit')).at(-1)).toEqual([
+      'new-1',
+      '2026-11-27',
+      { agreement: true, notice: true, consent: true },
+      'en',
+    ]);
+    // What was accepted can be read again, with when.
+    const agreement = await (await request('/agreement', { headers: { Cookie: cookie } })).text();
+    expect(agreement).toContain('Emanet Field Agent Agreement');
+    expect(agreement).toContain('You accepted this version on');
+    expect((await request('/agreement')).status).toBe(200);
     const status = await (await request('/status', { headers: { Cookie: cookie } })).text();
     expect(status).toContain('We’ll call you');
     expect(status).toContain('05321234567');

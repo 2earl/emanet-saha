@@ -69,6 +69,9 @@ describe('Turkish', () => {
 
     const pending = await signIn('pending-1');
     await get('/apply', await signIn('returned-2'));
+    await get('/agreement', pending);
+    await get('/agreement');
+    await send('/apply/submit', await signIn('returned-3'), { terms: 'x', accept: '1' });
     await get('/status', pending);
 
     const agent = await signIn('active-1');

@@ -2695,3 +2695,125 @@ ol.tracker span {
   color: var(--action-ink);
   text-decoration: none;
 }
+
+/* ---- Fixes found on the rendered pages (2026-11-28) ------------------------------------------------ */
+
+/* Money inside a count tile is a number, not a caption. */
+.counts strong span {
+  font-size: inherit;
+  color: inherit;
+}
+
+/* A field and its button sit on one line, bottoms level. */
+form.inline {
+  align-items: flex-end;
+}
+
+/* Two fields side by side keep their own height when one has a hint under it. */
+.grid2 {
+  align-items: start;
+}
+
+/* A vehicle card: the plate never runs out of the card. */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.card .plate.large {
+  font-size: clamp(1.25rem, 5.4vw, 1.7rem);
+  max-width: 100%;
+}
+
+.card form button {
+  width: 100%;
+}
+
+/* The bar keeps one height whether or not someone is signed in. */
+.bar .who a.button {
+  padding: 0.4rem 0.9rem;
+  min-height: 0;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 47.99rem) {
+  .hero {
+    margin-top: 1rem;
+  }
+
+  /* On a phone the last column of the payments table gives way. */
+  table.payments th:nth-child(4),
+  table.payments td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* ---- The application's documents and consents ----------------------------------------------------- */
+
+.doc-upload {
+  margin: 1rem 0;
+  padding: 1rem 1.1rem;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+
+.doc-upload h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.consents {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.consents label.check {
+  align-items: flex-start;
+  padding: 0.8rem 0.9rem;
+  background: var(--sunken);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+
+.consents label.check input {
+  margin-top: 0.2rem;
+}
+
+.legal {
+  scroll-margin-top: 5rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.legal h3 {
+  margin: 1.5rem 0 0.4rem;
+  font-family: inherit;
+  font-size: 1.05rem;
+}
+
+.inline-toc {
+  flex-direction: row;
+  flex-wrap: wrap;
+  position: static;
+  margin: 1rem 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  font-family: var(--display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--action);
+}

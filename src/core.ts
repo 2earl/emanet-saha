@@ -30,6 +30,7 @@ export interface AgentProfile {
   open_claims: number;
   /** What staff asked the applicant to correct, while the application is back with them. */
   review_note?: string | null;
+  address?: string | null;
 }
 
 export interface ProfileInput {
@@ -42,6 +43,7 @@ export interface ProfileInput {
   /** T.C. kimlik no: given once; empty afterwards to keep the one on record. */
   tckn?: string | null;
   birthYear?: number | null;
+  address?: string | null;
 }
 
 export interface Hunt {
@@ -119,6 +121,37 @@ export interface Earnings {
   paid_kurus: number;
 }
 
+export interface AgreementText {
+  title: string;
+  intro: string;
+  sections: { title: string; paragraphs: string[] }[];
+}
+export interface AgreementBundle {
+  version: string;
+  sha256: string;
+  agreement: AgreementText;
+  notice: AgreementText;
+  consent: string;
+}
+export interface Acceptance {
+  version: string;
+  sha256: string;
+  locale: string;
+  accepted_at: number;
+  current: boolean;
+}
+export const DOCUMENT_KINDS = ['criminal_record', 'population_record'] as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+export interface AgentDocument {
+  id: string;
+  kind: DocumentKind;
+  barcode: string;
+  uploaded_at: number;
+  status: 'uploaded' | 'verified' | 'rejected';
+  outcome: string | null;
+  note: string | null;
+}
+
 export interface FieldApi {
   /** An unexpected error: a route pattern and an error's name, for staff's System page. */
   reportError(event: string, detail: string): Promise<void>;
@@ -130,7 +163,19 @@ export interface FieldApi {
     input: { email: string; locale: 'tr' | 'en' },
   ): Promise<Result<{ email: string }>>;
   confirmEmailCode(agentId: string, code: string): Promise<Result<{ email: string }>>;
-  submit(agentId: string, termsVersion: string): Promise<Result<null>>;
+  submit(
+    agentId: string,
+    termsVersion: string,
+    consents?: { agreement: boolean; notice: boolean; consent: boolean },
+    locale?: string,
+  ): Promise<Result<null>>;
+  agreement(locale: 'tr' | 'en'): Promise<Result<AgreementBundle>>;
+  acceptance(agentId: string): Promise<Result<Acceptance | null>>;
+  documents(agentId: string): Promise<Result<AgentDocument[]>>;
+  addDocument(
+    agentId: string,
+    input: { kind: string; file_ref: string; sha256: string; barcode: string },
+  ): Promise<Result<{ id: string }>>;
   hunts(agentId: string, query: { city?: string; limit?: number }): Promise<Result<Hunt[]>>;
   claim(agentId: string, vehicleId: string): Promise<Result<Claim>>;
   release(agentId: string, claimId: string): Promise<Result<null>>;
