@@ -152,6 +152,21 @@ const notice = (text: string | null) => (text ? `<p class="notice">${esc(text)}<
 const error = (text: string | null) =>
   text ? `<p class="error" role="alert">${esc(text)}</p>` : '';
 
+/**
+ * The breadcrumb (2earl design system): parents as links, then this page. Each item is HTML
+ * already made safe by the caller. On a phone only the direct parent shows, as one step back.
+ */
+export function crumbs(items: string[]): string {
+  const last = items.length - 1;
+  return `<nav class="crumbs" aria-label="Breadcrumb"><ol>${items
+    .map((item, i) =>
+      i === last
+        ? `<li><span aria-current="page">${item}</span></li>`
+        : `<li${i === last - 1 ? ' class="back-to"' : ''}>${item}</li>`,
+    )
+    .join('')}</ol></nav>`;
+}
+
 export function problem(nav: Nav, title: string, text: string): string {
   return layout(
     title,
@@ -593,7 +608,17 @@ export function hunts(
   profile: AgentProfile,
   errorText: string | null,
   noticeText: string | null,
+  /** The agent has never taken a vehicle: show how the work goes. */
+  first = false,
 ): string {
+  const guide = first
+    ? `<div class="panel guide" translate="no"><h2>${esc(L('How it works', 'Nasıl çalışır'))}</h2>
+        <ol class="tracker">
+          <li class="now">${icon('car')}<div><strong>${esc(L('Choose a vehicle', 'Bir araç seçin'))}</strong><span>${esc(L('It is yours for a limited time; only you see where to look.', 'Sınırlı bir süre sizindir; nerede aranacağını yalnızca siz görürsünüz.'))}</span></div></li>
+          <li>${icon('phone')}<div><strong>${esc(L('See it, photograph it, call 112', 'Görün, fotoğraflayın, 112’yi arayın'))}</strong><span>${esc(L('Never touch the vehicle or speak to its owner. The police do the rest.', 'Araca asla dokunmayın, sahibiyle konuşmayın. Gerisini polis yapar.'))}</span></div></li>
+          <li>${icon('wallet')}<div><strong>${esc(L('Upload the documents, get paid', 'Belgeleri yükleyin, ödemenizi alın'))}</strong><span>${esc(L('The tow report and the custodian’s receipt. You are paid the amount shown once the creditor has paid.', 'Çekici tutanağı ve yediemin makbuzu. Alacaklı ödeyince gösterilen tutar size ödenir.'))}</span></div></li>
+        </ol></div>`
+    : '';
   const cards =
     list.length === 0
       ? `<div class="panel empty">${scene('road')}<p>No vehicles to look for here right now. Try another city, or come back later.</p></div>`
@@ -619,7 +644,7 @@ export function hunts(
        <label>City <input name="city" maxlength="40" value="${attr(city ?? profile.city ?? '')}"></label>
        <button class="secondary" type="submit">Show</button>
      </form>
-     <p class="hint">You earn the amount shown when the vehicle reaches a custodian car park. When you choose a vehicle, you see where to look for a limited time; nobody else can take it then.</p>
+     ${guide || '<p class="hint">You earn the amount shown when the vehicle reaches a custodian car park. When you choose a vehicle, you see where to look for a limited time; nobody else can take it then.</p>'}
      ${cards}`,
   );
 }
@@ -682,6 +707,24 @@ function uploadForm(claimId: string, kind: EvidenceKind, label: string): string 
   </form>`;
 }
 
+/** Where a claim is in its life, shown on every claim page: done, now, still to come. */
+function claimStages(state: 'searching' | 'reporting', underReview: boolean): string {
+  const now = state === 'searching' ? 0 : underReview ? 3 : 2;
+  const names: [string, string][] = [
+    ['Look', 'Ara'],
+    ['Seen, 112 called', 'Görüldü, 112 arandı'],
+    ['Documents', 'Belgeler'],
+    ['2earl checks', '2earl kontrol eder'],
+    ['Paid', 'Ödeme'],
+  ];
+  return `<ol class="progress stages" translate="no" aria-label="${attr(L('Where this vehicle is', 'Bu araç hangi aşamada'))}">${names
+    .map(
+      ([en, tr], i) =>
+        `<li class="${i < now ? 'done' : i === now ? 'now' : ''}"><span${i === now ? ' aria-current="step"' : ''}>${esc(L(en, tr))}</span></li>`,
+    )
+    .join('')}</ol>`;
+}
+
 export function claim(
   nav: Nav,
   d: ClaimDetails,
@@ -735,9 +778,11 @@ export function claim(
   return layout(
     'Vehicle',
     { ...nav, current: 'claims' },
-    `${notice(noticeText)}
+    `${crumbs(['<a href="/claims">My work</a>', data(d.plate)])}
+     ${notice(noticeText)}
      <p>${plate(d.plate, 'large')}</p>
      <h1>${data([d.make, d.model, d.year === null ? '' : String(d.year), d.colour ?? ''].filter(Boolean).join(' · '))}</h1>
+     ${claimStages(c.state, mine?.under_review === true)}
      <p class="lede">Yours until ${clock(c.expires_at)} <span class="status active" translate="no">${esc(timeLeft(c.expires_at, now))}</span></p>
      <p class="hint">${c.state === 'reporting' ? 'The police have been called.' : 'Look for it at these places.'}</p>
      ${error(errorText)}
@@ -764,7 +809,8 @@ export function found(nav: Nav, d: ClaimDetails, errorText: string | null): stri
   return layout(
     'Report a sighting',
     { ...nav, current: 'claims' },
-    `<p>${plate(d.plate, 'large')}</p>
+    `${crumbs(['<a href="/claims">My work</a>', `<a href="/claims/${attr(d.claim.id)}" translate="no">${esc(d.plate)}</a>`, 'Report a sighting'])}
+     <p>${plate(d.plate, 'large')}</p>
      <h1>You see the vehicle</h1>
      <p class="lede">Check the plate. Take one photo of the vehicle with its plate, here in the app. Your location is sent with it.</p>
      ${error(errorText)}
@@ -899,7 +945,7 @@ export function statement(nav: Nav, p: Earnings['payouts'][number], profile: Age
   return layout(
     'Payment statement',
     { ...nav, current: 'earnings' },
-    `<p class="noprint"><a href="/earnings" translate="no">${esc(L('All payments', 'Tüm ödemeler'))}</a></p>
+    `${crumbs(['<a href="/earnings">Earnings</a>', `<span translate="no">${esc(L('Payment statement', 'Ödeme özeti'))}</span>`])}
      <h1 translate="no">${esc(L('Payment statement', 'Ödeme özeti'))}</h1>
      <div class="panel"><dl class="facts">
        ${row(L('Paid to', 'Alıcı'), data(profile.legal_name ?? '—'))}
@@ -1005,7 +1051,7 @@ export function supportNew(
   return layout(
     'New message',
     { ...nav, current: 'support' },
-    `<p><a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a></p>
+    `${crumbs([`<a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a>`, `<span translate="no">${esc(L('New message', 'Yeni mesaj'))}</span>`])}
      <h1 translate="no">${esc(L('New message', 'Yeni mesaj'))}</h1>
      ${error(errorText)}
      <form method="post" action="/support/new" class="stack" translate="no">
@@ -1030,7 +1076,7 @@ export function supportThread(
   return layout(
     t.ticket.subject,
     { ...nav, current: 'support' },
-    `${notice(noticeText)}<p><a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a></p>
+    `${crumbs([`<a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a>`, data(t.ticket.subject)])}${notice(noticeText)}
      <h1>${data(t.ticket.subject)}</h1>
      <p class="hint" translate="no">${esc(categoryName(t.ticket.category))} · ${esc(ticketStatus(t.ticket.status))}</p>
      <ul class="cards">${t.messages.map(bubble).join('')}</ul>
