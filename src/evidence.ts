@@ -71,3 +71,45 @@ export async function storeEvidence(
   if (!result.ok) await env.EVIDENCE.delete(key);
   return result;
 }
+
+// ---- The applicant's e-Devlet documents ------------------------------------------------------------
+
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/** A PDF from e-Devlet, or a photo or screenshot of one. */
+export async function readDocument(
+  value: unknown,
+): Promise<Result<{ bytes: Uint8Array; type: string }>> {
+  if (!(value instanceof File) || value.size === 0) return { ok: false, error: 'no_document' };
+  if (value.size > MAX_DOCUMENT_BYTES) return { ok: false, error: 'document_too_large' };
+  const bytes = new Uint8Array(await value.arrayBuffer());
+  const pdf = [0x25, 0x50, 0x44, 0x46].every((b, i) => bytes[i] === b);
+  const type = pdf ? 'application/pdf' : photoType(bytes);
+  if (!type) return { ok: false, error: 'not_a_document' };
+  return { ok: true, value: { bytes, type } };
+}
+
+/** Stored under the agent, recorded in the core; removed again if the core refuses it. */
+export async function storeDocument(
+  env: Env,
+  agentId: string,
+  kind: string,
+  barcode: string,
+  file: { bytes: Uint8Array; type: string },
+): Promise<Result<{ id: string }>> {
+  const key = `agents/${agentId}/${kind}-${crypto.randomUUID()}`;
+  const hash = await sha256(file.bytes);
+  await env.EVIDENCE.put(key, file.bytes, {
+    httpMetadata: { contentType: file.type },
+    customMetadata: { agent: agentId, kind },
+    sha256: hash,
+  });
+  const result = await core(env).addDocument(agentId, {
+    kind,
+    file_ref: key,
+    sha256: hash,
+    barcode,
+  });
+  if (!result.ok) await env.EVIDENCE.delete(key);
+  return result;
+}

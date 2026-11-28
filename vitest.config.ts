@@ -54,6 +54,8 @@ function seed() {
       colour: 'Beyaz', areas: [{ district: 'Karşıyaka', city: 'İzmir' }], earn_kurus: 600000 },
     claims: new Map(),
     hashes: new Set(),
+    documents: new Map(),
+    accepted: new Map(),
   };
 }
 seed();
@@ -65,7 +67,7 @@ function agentFor(id) {
     s.agents.set(id, { status, legal_name: 'Ayşe Yılmaz', city: 'İzmir', phone: '+905321234567',
       iban: 'TR330006100519786457841326', iban_verified: status === 'active', tax_profile: 'individual',
       vkn: null, terms_version: TERMS, current_terms: TERMS, submitted_at: now() - 60, strikes: 0, open_claims: 0,
-      email: 'ayse@example.com', id_given: true, birth_year: 1990,
+      email: 'ayse@example.com', id_given: true, birth_year: 1990, address: 'Örnek Mah. Deneme Sk. No:1 İzmir',
       review_note: status === 'applied' ? 'The IBAN is not in your own name.' : null });
   }
   return s.agents.get(id);
@@ -88,7 +90,8 @@ export class FieldApi extends WorkerEntrypoint {
     if (input.tckn === '10000000146') return fail('tckn_taken');
     if (input.tckn) { a.id_given = true; a.birth_year = input.birthYear; }
     Object.assign(a, { legal_name: input.legalName, city: input.city, phone: input.phone,
-      iban: input.iban.replace(/\\s/g, ''), tax_profile: input.taxProfile, vkn: input.vkn ?? null });
+      iban: input.iban.replace(/\\s/g, ''), tax_profile: input.taxProfile, vkn: input.vkn ?? null,
+      address: input.address ?? a.address ?? null });
     return ok(null);
   }
   async requestEmailCode(id, input) {
@@ -106,11 +109,30 @@ export class FieldApi extends WorkerEntrypoint {
     return ok({ email: s.pending.email });
   }
   async reportError(event, detail) { log('reportError', [event, detail]); }
-  async submit(id, terms) {
-    log('submit', [id, terms]);
+  async agreement(locale) {
+    const part = (title) => ({ title, intro: 'Intro.', sections: [{ title: '1. Konu', paragraphs: ['Paragraf.'] }] });
+    return ok({ version: TERMS, sha256: 'a'.repeat(64), agreement: part(locale === 'tr' ? 'Emanet Saha Görevlisi Sözleşmesi' : 'Emanet Field Agent Agreement'),
+      notice: part('Aydınlatma'), consent: 'Açık rıza metni.' });
+  }
+  async acceptance(id) { return ok(s.accepted.get(id) ?? null); }
+  async documents(id) { return ok(s.documents.get(id) ?? []); }
+  async addDocument(id, input) {
+    log('addDocument', [id, input.kind, input.barcode]);
+    if (!/^[A-Za-z0-9-]{6,40}$/.test(input.barcode)) return fail('invalid_barcode');
+    const list = (s.documents.get(id) ?? []).filter((d) => d.kind !== input.kind);
+    list.push({ id: 'doc-' + input.kind, kind: input.kind, barcode: input.barcode, uploaded_at: now(), status: 'uploaded', outcome: null, note: null });
+    s.documents.set(id, list);
+    return ok({ id: 'doc-' + input.kind });
+  }
+  async submit(id, terms, consents, locale) {
+    log('submit', [id, terms, consents, locale]);
     const a = agentFor(id);
+    if (!consents || !consents.agreement || !consents.notice || !consents.consent) return fail('consents_missing');
     if (terms !== TERMS) return fail('terms_changed');
     if (!a.legal_name) return fail('profile_incomplete');
+    if (!a.address) return fail('profile_incomplete', 'address');
+    if ((s.documents.get(id) ?? []).length < 2) return fail('documents_missing');
+    s.accepted.set(id, { version: TERMS, sha256: 'a'.repeat(64), locale, accepted_at: now(), current: true });
     if (!a.email) return fail('email_not_verified');
     a.status = 'kyc_pending';
     return ok(null);

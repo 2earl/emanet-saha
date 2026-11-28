@@ -18,6 +18,19 @@ export const tr: Catalog = {
   ],
   monthsShort: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
   messages: {
+    'Tick all three boxes to continue: the agreement, the privacy notice and the consent.':
+      'Devam etmek için üç kutuyu da işaretleyin: sözleşme, aydınlatma metni ve açık rıza.',
+    'Upload both e-Devlet documents first.': 'Önce iki e-Devlet belgesini de yükleyin.',
+    'Enter your home address (at least 10 characters).':
+      'İkamet adresinizi girin (en az 10 karakter).',
+    'Choose which document this is.': 'Bunun hangi belge olduğunu seçin.',
+    'Enter the barcode number printed on the document.': 'Belgede yazan barkod numarasını girin.',
+    'Choose the document’s file.': 'Belgenin dosyasını seçin.',
+    'The file is larger than 10 MB.': 'Dosya 10 MB’tan büyük.',
+    'Upload the PDF from e-Devlet, or a photo of it.':
+      'e-Devlet’ten aldığınız PDF’i ya da fotoğrafını yükleyin.',
+    'Document uploaded.': 'Belge yüklendi.',
+    Agreement: 'Sözleşme',
     '{0} · Emanet Saha': '{0} · Emanet Saha',
     'Field agents': 'Saha ajanları',
     Sections: 'Bölümler',

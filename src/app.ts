@@ -11,8 +11,15 @@ import {
   finishSignIn,
   startSignIn,
 } from './auth';
-import { TAX_PROFILES, core, type AgentProfile, type EvidenceKind, type TaxProfile } from './core';
-import { readPhoto, storeEvidence } from './evidence';
+import {
+  DOCUMENT_KINDS,
+  TAX_PROFILES,
+  core,
+  type AgentProfile,
+  type EvidenceKind,
+  type TaxProfile,
+} from './core';
+import { readDocument, readPhoto, storeDocument, storeEvidence } from './evidence';
 import {
   SECURITY_HEADERS,
   SESSION_COOKIE,
@@ -52,6 +59,15 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_vkn: 'Enter your tax number (VKN): 10 digits, or 11 for a person.',
   profile_locked: 'Your name, city and tax details were checked. Contact 2earl to change them.',
   profile_incomplete: 'Fill in and save your details first.',
+  consents_missing:
+    'Tick all three boxes to continue: the agreement, the privacy notice and the consent.',
+  documents_missing: 'Upload both e-Devlet documents first.',
+  invalid_address: 'Enter your home address (at least 10 characters).',
+  invalid_document: 'Choose which document this is.',
+  invalid_barcode: 'Enter the barcode number printed on the document.',
+  no_document: 'Choose the document’s file.',
+  document_too_large: 'The file is larger than 10 MB.',
+  not_a_document: 'Upload the PDF from e-Devlet, or a photo of it.',
   invalid_tckn: 'Enter your T.C. kimlik no: 11 digits, as on your ID card.',
   invalid_birth_year: 'Enter the year you were born. Agents are 18 or older.',
   tckn_taken: 'This ID number already has an Emanet Saha account. One person, one account.',
@@ -94,6 +110,7 @@ const DONE: Record<string, string> = {
   submitted: 'Sent. We’ll call you for the identity check.',
   released: 'Given up. Someone else can look for it now.',
   uploaded: 'Uploaded.',
+  document: 'Document uploaded.',
 };
 const done = (c: AppContext) => DONE[c.req.query('done') ?? ''] ?? null;
 
@@ -260,6 +277,18 @@ export function createApp(now: () => number) {
 
   app.get('/terms', (c) => c.html(pages.terms(nav(c))));
 
+  // The agent agreement, the privacy notice and the consent text: public, like the rules, so
+  // anyone can read what an agent agrees to before signing in.
+  app.get('/agreement', async (c) => {
+    const locale = c.get('locale') === 'en' ? 'en' : 'tr';
+    const bundle = await core(c.env).agreement(locale);
+    if (!bundle.ok)
+      return c.html(pages.problem(nav(c), 'Not found', 'This page doesn’t exist.'), 404);
+    const session = c.get('session');
+    const accepted = session ? await core(c.env).acceptance(session.uid) : null;
+    return c.html(pages.agreementPage(nav(c), bundle.value, accepted?.ok ? accepted.value : null));
+  });
+
   app.get('/oauth/client.json', (c) => {
     const response = c.json(clientMetadata(c.env));
     response.headers.set('Cache-Control', 'public, max-age=300');
@@ -348,26 +377,30 @@ export function createApp(now: () => number) {
     vkn: v.vkn ? v.vkn : null,
     tckn: v.tckn ? v.tckn : null,
     birthYear: /^\d{4}$/.test(v.birth_year ?? '') ? Number(v.birth_year) : null,
+    address: v.address ? v.address : null,
   });
 
-  const applyPage = (
+  const applyPage = async (
     c: AppContext,
     values: Record<string, string>,
     errorText: string | null,
     pendingEmail: string | null = null,
-  ) =>
-    pages.apply(
+  ) => {
+    const documents = await core(c.env).documents(uid(c));
+    return pages.apply(
       nav(c),
       agent(c),
       values,
       errorText,
       done(c),
       pendingEmail ?? (c.req.query('code') === '1' ? text(c.req.query('email')) : null),
+      documents.ok ? documents.value : [],
     );
+  };
 
-  app.get('/apply', (c) => {
+  app.get('/apply', async (c) => {
     if (agent(c).status !== 'applied') return c.redirect(homeFor(agent(c)), 302);
-    return c.html(applyPage(c, pages.profileValues(agent(c)), null));
+    return c.html(await applyPage(c, pages.profileValues(agent(c)), null));
   });
 
   // Step 1: an email address, proved with a code we mail to it.
@@ -381,7 +414,7 @@ export function createApp(now: () => number) {
     });
     if (!result.ok) {
       return c.html(
-        applyPage(
+        await applyPage(
           c,
           pages.profileValues(agent(c)),
           errorText(result.error),
@@ -403,7 +436,7 @@ export function createApp(now: () => number) {
     const result = await core(c.env).confirmEmailCode(uid(c), v.code ?? '');
     if (!result.ok) {
       return c.html(
-        applyPage(
+        await applyPage(
           c,
           pages.profileValues(agent(c)),
           errorText(result.error),
@@ -418,23 +451,49 @@ export function createApp(now: () => number) {
   app.post('/apply/profile', async (c) => {
     const v = await formValues(c);
     const result = await core(c.env).updateProfile(uid(c), profileInput(v));
-    if (!result.ok) return c.html(applyPage(c, v, errorText(result.error)), 422);
+    if (!result.ok) return c.html(await applyPage(c, v, errorText(result.error)), 422);
     return c.redirect('/apply?done=saved', 303);
   });
 
   app.post('/apply/submit', async (c) => {
     const v = await formValues(c);
-    if (v.accept !== '1') {
+    if (v.accept !== '1' || v.notice !== '1' || v.consent !== '1') {
       return c.html(
-        applyPage(c, pages.profileValues(agent(c)), 'Accept the rules to continue.'),
+        await applyPage(c, pages.profileValues(agent(c)), errorText('consents_missing')),
         422,
       );
     }
-    const result = await core(c.env).submit(uid(c), v.terms ?? '');
+    const result = await core(c.env).submit(
+      uid(c),
+      v.terms ?? '',
+      { agreement: true, notice: true, consent: true },
+      c.get('locale'),
+    );
     if (!result.ok) {
-      return c.html(applyPage(c, pages.profileValues(agent(c)), errorText(result.error)), 422);
+      return c.html(
+        await applyPage(c, pages.profileValues(agent(c)), errorText(result.error)),
+        422,
+      );
     }
     return c.redirect('/status?done=submitted', 303);
+  });
+
+  /** One of the two e-Devlet documents, with its barcode number. */
+  app.post('/apply/documents', async (c) => {
+    const limited = await tooFast(c, 'upload');
+    if (limited) return limited;
+    const form = await c.req.parseBody();
+    const kind = text(form.kind);
+    const barcode = text(form.barcode);
+    const values = pages.profileValues(agent(c));
+    if (!DOCUMENT_KINDS.includes(kind as (typeof DOCUMENT_KINDS)[number])) {
+      return c.html(await applyPage(c, values, errorText('invalid_document')), 422);
+    }
+    const file = await readDocument(form.file);
+    if (!file.ok) return c.html(await applyPage(c, values, errorText(file.error)), 422);
+    const stored = await storeDocument(c.env, uid(c), kind, barcode, file.value);
+    if (!stored.ok) return c.html(await applyPage(c, values, errorText(stored.error)), 422);
+    return c.redirect('/apply?done=document', 303);
   });
 
   app.get('/status', (c) => {

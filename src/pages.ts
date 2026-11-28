@@ -1,3 +1,5 @@
+import type { Acceptance, AgentDocument, AgreementBundle, AgreementText } from './core';
+import { DOCUMENT_KINDS } from './core';
 import type {
   AgentProfile,
   ClaimDetails,
@@ -108,7 +110,7 @@ ${body}
 </main>
 <footer>
   <span>Emanet finds vehicles and tells the police. Agents never touch, tow or follow anyone.</span>
-  <span><a href="/terms">Rules for agents</a> · <a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
+  <span><a href="/terms">Rules for agents</a> · <a href="/agreement" translate="no">${esc(L('Agreement', 'Sözleşme'))}</a> · <a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
   ${languageSwitcher()}
 </footer>
 </body>
@@ -194,10 +196,12 @@ function profileFields(values: Record<string, string>, locked: boolean): string 
         ? ''
         : `<div class="grid2">
              <label>T.C. kimlik no <input name="tckn" inputmode="numeric" pattern="[0-9 ]{11,13}" maxlength="13" autocomplete="off" value="${attr(values.tckn ?? '')}"${values.id_given === '1' ? '' : ' required'}>
-               <span class="hint">${values.id_given === '1' ? 'On record. Leave empty unless it has to change.' : 'Checked against the population registry, then only a scrambled fingerprint of it is kept: enough to stop a second account, not enough to read the number.'}</span></label>
+               <span class="hint" translate="no">${esc(values.id_given === '1' ? L('On record. Leave empty unless it has to change.', 'Kayıtlı. Değişmesi gerekmiyorsa boş bırakın.') : L('Checked against the population registry. Kept encrypted, only for the tax document of a payment to you, and as a fingerprint that stops a second account.', 'Nüfus kayıtlarıyla karşılaştırılır. Şifreli olarak ve yalnızca size yapılan ödemenin vergi belgesi için saklanır; ayrıca ikinci bir hesabı önleyen bir özet tutulur.'))}</span></label>
              <label>Year of birth <input name="birth_year" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="bday-year" required value="${attr(values.birth_year ?? '')}"></label>
            </div>`
     }
+    <label><span translate="no">${esc(L('Home address', 'İkamet adresi'))}</span> <input name="address" required minlength="10" maxlength="300" autocomplete="street-address" value="${attr(values.address ?? '')}">
+      <span class="hint" translate="no">${esc(L('As on your population register extract. Tax law wants it on the document for a payment to you.', 'Nüfus kayıt örneğinizdeki gibi. Vergi mevzuatı, size yapılan ödemenin belgesinde yer almasını ister.'))}</span></label>
     <label>City you work in <input name="city" required maxlength="40" autocomplete="address-level1" value="${attr(values.city ?? '')}"${lockedAttr}></label>
     <label>Mobile number <input name="phone" type="tel" required maxlength="20" autocomplete="tel" inputmode="tel" value="${attr(values.phone ?? '')}"></label>
     <label>IBAN in your own name <input name="iban" required maxlength="40" autocomplete="off" spellcheck="false" value="${attr(values.iban ?? '')}"></label>
@@ -220,9 +224,123 @@ export const profileValues = (p: AgentProfile): Record<string, string> => ({
   iban: p.iban ?? '',
   tax_profile: p.tax_profile,
   vkn: p.vkn ?? '',
+  address: p.address ?? '',
   birth_year: p.birth_year ? String(p.birth_year) : '',
   id_given: p.id_given ? '1' : '',
 });
+
+/** An element shown in the reader's language without the catalogue. */
+const both = (en: string, tr: string) => `<span translate="no">${esc(L(en, tr))}</span>`;
+
+const DOCUMENT_TEXT: Record<
+  (typeof DOCUMENT_KINDS)[number],
+  { en: string; tr: string; how: [string, string] }
+> = {
+  criminal_record: {
+    en: 'Criminal record (adli sicil kaydı)',
+    tr: 'Adli sicil kaydı',
+    how: [
+      'e-Devlet → “Adli Sicil Kaydı Sorgulama” → where it will be given: “Özel kurum” → download the barcoded PDF.',
+      'e-Devlet → “Adli Sicil Kaydı Sorgulama” → belgenin verileceği yer: “Özel kurum” → barkodlu PDF’i indirin.',
+    ],
+  },
+  population_record: {
+    en: 'Population register extract (nüfus kayıt örneği)',
+    tr: 'Nüfus kayıt örneği',
+    how: [
+      'e-Devlet → “Nüfus Kayıt Örneği Belgesi Sorgulama” → download the barcoded PDF.',
+      'e-Devlet → “Nüfus Kayıt Örneği Belgesi Sorgulama” → barkodlu PDF’i indirin.',
+    ],
+  },
+};
+
+const DOCUMENT_STATE: Record<AgentDocument['status'], [string, string, string]> = {
+  uploaded: ['Uploaded, waiting to be checked', 'Yüklendi, inceleme bekliyor', 'pending'],
+  verified: ['Checked', 'İncelendi', 'active'],
+  rejected: ['Not accepted: upload a new one', 'Kabul edilmedi: yenisini yükleyin', 'rejected'],
+};
+
+/** Step 3: the two documents from e-Devlet, each with its barcode number. */
+function documentsStep(documents: AgentDocument[], ready: boolean): string {
+  if (!ready) {
+    return `<p class="panel" translate="no">${esc(L('Save your details first.', 'Önce bilgilerinizi kaydedin.'))}</p>`;
+  }
+  const one = (kind: (typeof DOCUMENT_KINDS)[number]) => {
+    const text = DOCUMENT_TEXT[kind];
+    const have = documents.find((d) => d.kind === kind);
+    const state = have ? DOCUMENT_STATE[have.status] : null;
+    const form =
+      have?.status === 'verified'
+        ? ''
+        : `<form method="post" action="/apply/documents" enctype="multipart/form-data" class="stack">
+             <input type="hidden" name="kind" value="${kind}">
+             <label>${esc(L('The document (PDF from e-Devlet)', 'Belge (e-Devlet’ten alınan PDF)'))} <input type="file" name="file" accept="application/pdf,image/*" required></label>
+             <label>${esc(L('Barcode number on the document', 'Belgedeki barkod numarası'))} <input name="barcode" required maxlength="40" autocomplete="off" spellcheck="false" value="${attr(have?.barcode ?? '')}">
+               <span class="hint">${esc(L('Printed beside the barcode, at the bottom of the page. We use it to verify the document at e-Devlet.', 'Sayfanın altında, barkodun yanında yazar. Belgeyi e-Devlet’te doğrulamak için kullanırız.'))}</span></label>
+             <div><button class="secondary" type="submit">${esc(have ? L('Replace', 'Değiştir') : L('Upload', 'Yükle'))}</button></div>
+           </form>`;
+    return `<div class="doc-upload">
+        <h3>${icon('file')}<span>${esc(L(text.en, text.tr))}</span>${state ? ` <span class="status ${state[2]}">${esc(L(state[0], state[1]))}</span>` : ''}</h3>
+        <p class="hint">${esc(L(text.how[0], text.how[1]))}</p>
+        ${have?.status === 'rejected' && have.note ? `<p class="error">${esc(have.note)}</p>` : ''}
+        ${form}
+      </div>`;
+  };
+  return `<div translate="no">
+      <p>${esc(L('Get both documents from e-Devlet today or in the last 30 days, as barcoded PDFs. We verify each at e-Devlet and then delete the file; only the result is kept.', 'İki belgeyi de e-Devlet’ten, bugün ya da son 30 gün içinde, barkodlu PDF olarak alın. Her birini e-Devlet’te doğrular ve ardından dosyayı sileriz; yalnızca sonuç saklanır.'))}</p>
+      ${DOCUMENT_KINDS.map(one).join('')}
+    </div>`;
+}
+
+function agreementPart(id: string, text: AgreementText): string {
+  return `<section id="${id}" class="legal"><h2>${esc(text.title)}</h2><p>${esc(text.intro)}</p>${text.sections
+    .map(
+      (section) =>
+        `<h3>${esc(section.title)}</h3>${section.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}`,
+    )
+    .join('')}</section>`;
+}
+
+/** The agent agreement, the privacy notice and the consent text, with what this agent accepted. */
+export function agreementPage(
+  nav: Nav,
+  bundle: AgreementBundle,
+  accepted: Acceptance | null,
+): string {
+  const l = currentLocale() === 'tr' ? 'tr' : 'en';
+  const record = accepted
+    ? `<p class="${accepted.current ? 'notice' : 'error'}">${esc(
+        accepted.current
+          ? L(
+              `You accepted this version on ${stamp(accepted.accepted_at)}.`,
+              `Bu sürümü ${stamp(accepted.accepted_at)} tarihinde onayladınız.`,
+            )
+          : L(
+              `You accepted an earlier version (${accepted.version}) on ${stamp(accepted.accepted_at)}. The text has changed since.`,
+              `Daha önceki bir sürümü (${accepted.version}) ${stamp(accepted.accepted_at)} tarihinde onayladınız. Metin o tarihten sonra değişti.`,
+            ),
+      )}</p>`
+    : '';
+  return layout(
+    'Agreement',
+    nav,
+    `<div translate="no" lang="${l}" class="prose">
+       <p class="eyebrow">${esc(L('Version', 'Sürüm'))} ${esc(bundle.version)}</p>
+       <h1>${esc(L('What you agree to', 'Neyi kabul ediyorsunuz'))}</h1>
+       <p class="lede">${esc(L('Three texts: the agreement you accept, the privacy notice you read, and the consent you give for one check. The Turkish text is the binding one.', 'Üç metin: onayladığınız sözleşme, okuduğunuz aydınlatma metni ve tek bir inceleme için verdiğiniz açık rıza. Bağlayıcı olan Türkçe metindir.'))}</p>
+       ${record}
+       <nav class="toc inline-toc"><a href="#agreement">${esc(bundle.agreement.title)}</a><a href="#notice">${esc(bundle.notice.title)}</a><a href="#consent">${esc(L('Explicit consent', 'Açık rıza'))}</a></nav>
+       ${agreementPart('agreement', bundle.agreement)}
+       ${agreementPart('notice', bundle.notice)}
+       <section id="consent" class="legal"><h2>${esc(L('Explicit consent: criminal record', 'Açık rıza: adli sicil kaydı'))}</h2><p>${esc(bundle.consent)}</p></section>
+       <p class="hint">${esc(L('Digest of the binding text (SHA-256):', 'Bağlayıcı metnin özeti (SHA-256):'))} <code>${esc(bundle.sha256)}</code></p>
+     </div>`,
+  );
+}
+
+/** A date and time in Turkey's time, as text. */
+const stamp = (unix: number) =>
+  new Date((unix + 3 * 3600) * 1000).toISOString().slice(0, 16).replace('T', ' ');
 
 export function apply(
   nav: Nav,
@@ -232,10 +350,19 @@ export function apply(
   noticeText: string | null,
   /** The address a code was just mailed to, while the agent types the code. */
   pendingEmail: string | null = null,
+  documents: AgentDocument[] = [],
 ): string {
   const hasEmail = Boolean(profile.email);
   const hasDetails = Boolean(
-    profile.legal_name && profile.city && profile.phone && profile.iban && profile.id_given,
+    profile.legal_name &&
+    profile.city &&
+    profile.phone &&
+    profile.iban &&
+    profile.id_given &&
+    profile.address,
+  );
+  const hasDocuments = DOCUMENT_KINDS.every((kind) =>
+    documents.some((d) => d.kind === kind && d.status !== 'rejected'),
   );
   // The step's number is drawn by the stylesheet (a counter), so the heading is only its words.
   const step = (title: string, done: boolean, body: string) =>
@@ -272,7 +399,7 @@ export function apply(
          ? `<div class="callout returned" translate="no">${icon('info')}<div><strong>${esc(L('We need one thing corrected', 'Bir düzeltme gerekiyor'))}</strong><p>${esc(profile.review_note)}</p><p class="hint">${esc(L('Correct your details below and send the application again. Nothing you entered is lost.', 'Bilgilerinizi aşağıda düzeltip başvurunuzu yeniden gönderin. Girdiğiniz hiçbir şey kaybolmadı.'))}</p></div></div>`
          : ''
      }
-     <p class="lede">Four steps here, then a short video call with your ID card. One person, one account.</p>
+     <p class="lede" translate="no">${esc(L('Five steps here, then a short video call with your ID card. One person, one account.', 'Burada beş adım, ardından kimlik kartınızla kısa bir görüntülü görüşme. Bir kişi, bir hesap.'))}</p>
      ${error(errorText)}
      ${step('Your email address', hasEmail, email)}
      ${step(
@@ -283,17 +410,23 @@ export function apply(
           <div><button type="submit"${hasDetails ? ' class="secondary"' : ''}>Save</button></div>
         </form>`,
      )}
-     ${step('The rules', false, rulesList())}
+     ${step(both('Your e-Devlet documents', 'e-Devlet belgeleriniz'), hasDocuments, documentsStep(documents, hasDetails))}
+     ${step('The rules', false, `${rulesList()}<p translate="no"><a href="/agreement">${esc(L('Read the full agent agreement, the privacy notice and the consent text', 'Saha görevlisi sözleşmesinin, aydınlatma metninin ve açık rıza metninin tamamını okuyun'))}</a></p>`)}
      ${step(
        'Send your application',
        false,
-       hasEmail && hasDetails
+       hasEmail && hasDetails && hasDocuments
          ? `<form method="post" action="/apply/submit" class="stack">
              <input type="hidden" name="terms" value="${attr(profile.current_terms)}">
-             <label class="check"><input type="checkbox" name="accept" value="1" required> I have read the rules for agents and accept them, and the agent agreement.</label>
+             <div translate="no" class="consents">
+               <label class="check"><input type="checkbox" name="accept" value="1" required> <span>${L('I have read and accept the <a href="/agreement#agreement">Field Agent Agreement</a> and the rules above. I work independently, I never touch a vehicle or speak to its owner, and I am responsible for my own acts.', '<a href="/agreement#agreement">Saha Görevlisi Sözleşmesi</a>’ni ve yukarıdaki kuralları okudum, kabul ediyorum. Bağımsız çalışırım, araca asla dokunmam, sahibiyle konuşmam ve kendi eylemlerimden sorumluyum.')}</span></label>
+               <label class="check"><input type="checkbox" name="notice" value="1" required> <span>${L('I have read the <a href="/agreement#notice">Privacy Notice for Field Agents</a>.', '<a href="/agreement#notice">Saha Görevlisi Aydınlatma Metni</a>’ni okudum.')}</span></label>
+               <label class="check"><input type="checkbox" name="consent" value="1" required> <span>${L('I give my <a href="/agreement#consent">explicit consent</a> to my criminal record being examined to assess my application. The document is deleted once checked.', 'Adli sicil kaydımın başvurumun değerlendirilmesi amacıyla incelenmesine <a href="/agreement#consent">açık rıza</a> veriyorum. Belge incelendikten sonra silinir.')}</span></label>
+               <p class="hint">${esc(L(`Agreement version ${profile.current_terms}. The date and time of your acceptance and a digest of the text are recorded.`, `Sözleşme sürümü ${profile.current_terms}. Onayınızın tarihi, saati ve metnin özeti kaydedilir.`))}</p>
+             </div>
              <div><button type="submit">Send my application</button></div>
            </form>`
-         : `<p class="panel">${hasEmail ? 'Save your details first.' : 'Confirm your email address and save your details first.'}</p>`,
+         : `<p class="panel" translate="no">${esc(!hasEmail ? L('Confirm your email address and save your details first.', 'Önce e-posta adresinizi doğrulayın ve bilgilerinizi kaydedin.') : !hasDetails ? L('Save your details, with your address, first.', 'Önce bilgilerinizi adresinizle birlikte kaydedin.') : L('Upload both documents first.', 'Önce iki belgeyi de yükleyin.'))}</p>`,
      )}
      <h2>What happens next</h2>
      <ol class="rules">
@@ -613,7 +746,7 @@ export function earnings(nav: Nav, e: Earnings, profile: AgentProfile): string {
      ${
        e.payouts.length === 0
          ? `<div class="panel empty">${scene('inbox')}<p>No payments yet.</p></div>`
-         : `<table><thead><tr><th>Vehicle</th><th class="num">Net</th><th>Status</th><th>Updated</th></tr></thead><tbody>${e.payouts
+         : `<table class="payments"><thead><tr><th>Vehicle</th><th class="num">Net</th><th>Status</th><th>Updated</th></tr></thead><tbody>${e.payouts
              .map(
                (p) => `<tr><td>${plate(p.plate)}</td><td class="num">${lira(p.net_kurus)}</td>
                  <td>${PAYOUT_TEXT[p.status] ?? data(p.status)}</td><td>${clock(p.updated_at)}</td></tr>`,
