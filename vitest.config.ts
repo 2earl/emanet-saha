@@ -58,6 +58,7 @@ function seed() {
     accepted: new Map(),
     requests: new Map(),
     erasure: new Map(),
+    tickets: new Map(),
   };
 }
 seed();
@@ -255,6 +256,41 @@ export class FieldApi extends WorkerEntrypoint {
     return ok({ payouts: [{ id: 'po-1', plate: '06AB123', gross_kurus: 500000, withholding_kurus: 0,
       net_kurus: 500000, status: 'sent', created_at: now() - 86400, updated_at: now() - 3600 }],
       pending_kurus: 0, paid_kurus: 500000 });
+  }
+  async openTicket(id, input) {
+    log('openTicket', [id, input]);
+    if (input.subject.length < 3) return fail('invalid_subject');
+    if (input.message.length < 3) return fail('invalid_message');
+    if (!['payment', 'delivery', 'account', 'technical', 'other'].includes(input.category)) return fail('invalid_category');
+    const tid = 'tk-' + String(s.tickets.size + 1);
+    s.tickets.set(tid, { owner: id, ticket: { id: tid, subject: input.subject, category: input.category, status: 'open',
+      created_at: now(), updated_at: now(), closed_at: null },
+      messages: [{ id: 'm1', author_kind: 'requester', body: input.message, created_at: now() }] });
+    return ok({ id: tid });
+  }
+  async myTickets(id) { return ok([...s.tickets.values()].filter((t) => t.owner === id).map((t) => t.ticket)); }
+  async myTicket(id, tid) {
+    const t = s.tickets.get(tid);
+    return t && t.owner === id ? ok({ ticket: t.ticket, messages: t.messages }) : fail('not_found');
+  }
+  async replyTicket(id, tid, body) {
+    const t = s.tickets.get(tid);
+    if (!t || t.owner !== id) return fail('not_found');
+    if (body.length < 2) return fail('invalid_message');
+    t.messages.push({ id: 'm' + String(t.messages.length + 1), author_kind: 'requester', body, created_at: now() });
+    t.ticket.status = 'open';
+    return ok(null);
+  }
+  async closeTicket(id, tid) {
+    const t = s.tickets.get(tid);
+    if (!t || t.owner !== id) return fail('not_found');
+    t.ticket.status = 'closed';
+    return ok(null);
+  }
+  async testStaffReply(tid, body) {
+    const t = s.tickets.get(tid);
+    t.messages.push({ id: 'm' + String(t.messages.length + 1), author_kind: 'staff', body, created_at: now() });
+    t.ticket.status = 'answered';
   }
   async testCalls() { return s.calls; }
   async testReset() { seed(); }

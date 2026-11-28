@@ -17,6 +17,8 @@ import type {
   Hunt,
   MyClaim,
   TaxProfile,
+  TicketThread,
+  Ticket,
 } from './core';
 import { currentLocale, languageSwitcher } from './i18n';
 import { icon, scene, type IconName } from './icons';
@@ -49,7 +51,7 @@ const MARK =
   '<path fill="#ED1C24" d="M50 7 66 23 50 39 34 23Z"/>' +
   '</svg>';
 
-export type Section = 'hunts' | 'claims' | 'earnings' | 'account';
+export type Section = 'hunts' | 'claims' | 'earnings' | 'account' | 'support';
 
 export interface Nav {
   signedIn: boolean;
@@ -92,6 +94,7 @@ function layout(title: string, nav: Nav, body: string, options: { script?: boole
         ${link('hunts', '/hunts', 'Vehicles', 'car')}
         ${link('claims', '/claims', 'My work', 'reviews')}
         ${link('earnings', '/earnings', 'Earnings', 'wallet')}
+        ${link('support', '/support', 'Help', 'mail')}
         ${link('account', '/account', 'Account', 'user')}
       </nav>`
     : '';
@@ -128,7 +131,7 @@ ${body}
 </main>
 <footer>
   <span>Emanet finds vehicles and tells the police. Agents never touch, tow or follow anyone.</span>
-  <span><a href="/terms">Rules for agents</a> · <a href="/agreement" translate="no">${esc(L('Agreement', 'Sözleşme'))}</a> · ${nav.signedIn ? `<a href="/privacy" translate="no">${esc(L('My data', 'Verilerim'))}</a> · ` : ''}<a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
+  <span><a href="/terms">Rules for agents</a> · <a href="/agreement" translate="no">${esc(L('Agreement', 'Sözleşme'))}</a> · ${nav.signedIn ? `<a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a> · <a href="/privacy" translate="no">${esc(L('My data', 'Verilerim'))}</a> · ` : ''}<a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
   ${languageSwitcher()}
 </footer>
 </body>
@@ -754,7 +757,18 @@ export function claims(nav: Nav, list: MyClaim[], noticeText: string | null): st
   );
 }
 
+const STATEMENT_NOTE = () =>
+  L(
+    'A summary of the payment for your own records. It is not an invoice or a tax document.',
+    'Ödemenin kendi kayıtlarınız için özeti. Fatura ya da vergi belgesi değildir.',
+  );
+
 export function earnings(nav: Nav, e: Earnings, profile: AgentProfile): string {
+  const steps = `<ol class="tracker" translate="no">
+      <li>${icon('car')}<div><strong>${esc(L('You deliver', 'Teslim edersiniz'))}</strong><span>${esc(L('2earl checks your photos and the custodian’s receipt.', '2earl fotoğraflarınızı ve yediemin makbuzunu kontrol eder.'))}</span></div></li>
+      <li>${icon('clock')}<div><strong>${esc(L('The creditor pays', 'Alacaklı öder'))}</strong><span>${esc(L('Your payment is released once the creditor has paid for the vehicle.', 'Araç için alacaklı ödeme yapınca ödemeniz serbest kalır.'))}</span></div></li>
+      <li>${icon('wallet')}<div><strong>${esc(L('We pay your IBAN', 'IBAN’ınıza öderiz'))}</strong><span>${esc(L('Net of any withholding tax. Open a payment for its statement.', 'Varsa stopaj düşülmüş net tutar. Özeti için ödemeyi açın.'))}</span></div></li>
+    </ol>`;
   return layout(
     'Earnings',
     { ...nav, current: 'earnings' },
@@ -764,17 +778,175 @@ export function earnings(nav: Nav, e: Earnings, profile: AgentProfile): string {
        <div><strong>${lira(e.paid_kurus)}</strong><span>Paid</span></div>
      </div>
      ${profile.iban_verified ? '' : '<p class="error">Your IBAN hasn’t been checked yet. Payments wait until 2earl has checked it is in your name.</p>'}
-     <p class="hint">You are paid after the creditor has paid for the vehicle, to your IBAN, net of any withholding tax.</p>
      ${
        e.payouts.length === 0
-         ? `<div class="panel empty">${scene('inbox')}<p>No payments yet.</p></div>`
-         : `<table class="payments"><thead><tr><th>Vehicle</th><th class="num">Net</th><th>Status</th><th>Updated</th></tr></thead><tbody>${e.payouts
-             .map(
-               (p) => `<tr><td>${plate(p.plate)}</td><td class="num">${lira(p.net_kurus)}</td>
-                 <td>${PAYOUT_TEXT[p.status] ?? data(p.status)}</td><td>${clock(p.updated_at)}</td></tr>`,
-             )
-             .join('')}</tbody></table>`
+         ? `<div class="panel empty">${scene('inbox')}<p>No payments yet.</p></div>${steps}`
+         : `<p class="actions"><a class="button secondary" href="/earnings.csv" translate="no">${icon('download')} ${esc(L('Download all (CSV)', 'Tümünü indir (CSV)'))}</a></p>
+            <table class="payments"><thead><tr><th>Vehicle</th><th class="num">Gross</th><th class="num">Withheld</th><th class="num">Net</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>${e.payouts
+              .map(
+                (
+                  p,
+                ) => `<tr><td>${plate(p.plate)}</td><td class="num">${lira(p.gross_kurus)}</td><td class="num">${lira(p.withholding_kurus)}</td><td class="num">${lira(p.net_kurus)}</td>
+                 <td>${PAYOUT_TEXT[p.status] ?? data(p.status)}</td><td>${clock(p.updated_at)}</td>
+                 <td><a href="/earnings/${attr(p.id)}" translate="no">${esc(L('Statement', 'Özet'))}</a></td></tr>`,
+              )
+              .join('')}</tbody></table>
+            <p class="hint" translate="no">${esc(STATEMENT_NOTE())}</p>
+            ${steps}`
      }`,
+  );
+}
+
+export function statement(nav: Nav, p: Earnings['payouts'][number], profile: AgentProfile): string {
+  const day = (unix: number) =>
+    new Date(unix * 1000).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  const iban = profile.iban ? `TR•• •••• •••• •••• •••• ${profile.iban.slice(-4)}` : '—';
+  const row = (label: string, value: string) =>
+    `<dt translate="no">${esc(label)}</dt><dd>${value}</dd>`;
+  return layout(
+    'Payment statement',
+    { ...nav, current: 'earnings' },
+    `<p class="noprint"><a href="/earnings" translate="no">${esc(L('All payments', 'Tüm ödemeler'))}</a></p>
+     <h1 translate="no">${esc(L('Payment statement', 'Ödeme özeti'))}</h1>
+     <div class="panel"><dl class="facts">
+       ${row(L('Paid to', 'Alıcı'), data(profile.legal_name ?? '—'))}
+       ${row('IBAN', data(iban))}
+       ${row(L('Vehicle', 'Araç'), plate(p.plate))}
+       ${row(L('Gross', 'Brüt'), lira(p.gross_kurus))}
+       ${row(L('Withholding tax', 'Stopaj'), lira(p.withholding_kurus))}
+       ${row(L('Net to you', 'Size net'), `<strong>${lira(p.net_kurus)}</strong>`)}
+       ${row(L('Status', 'Durum'), PAYOUT_TEXT[p.status] ?? data(p.status))}
+       ${row(L('Created', 'Oluşturuldu'), data(day(p.created_at)))}
+       ${row(L('Last change', 'Son değişiklik'), data(day(p.updated_at)))}
+       ${row(L('Reference', 'Referans'), data(p.id))}
+     </dl></div>
+     <p class="hint" translate="no">${esc(STATEMENT_NOTE())}</p>
+     <p class="hint noprint" translate="no">${esc(L('To keep a copy, use your browser’s Print and choose Save as PDF.', 'Kopyasını saklamak için tarayıcınızın Yazdır seçeneğinde PDF olarak kaydet’i seçin.'))}</p>
+     <p class="noprint"><a href="/support/new?category=payment" translate="no">${esc(L('Question about this payment?', 'Bu ödemeyle ilgili sorunuz mu var?'))}</a></p>`,
+  );
+}
+
+/** Quoted for a spreadsheet: a cell that starts like a formula is made harmless. */
+const cell = (value: string) => {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
+const money = (kurus: number) => (kurus / 100).toFixed(2).replace('.', ',');
+
+/** All payments as a CSV Turkish Excel opens as is: semicolons, decimal commas, UTF-8 mark. */
+export function earningsCsv(e: Earnings): string {
+  const day = (unix: number) =>
+    new Date(unix * 1000).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  const head = [
+    'Reference',
+    'Vehicle',
+    'Gross TRY',
+    'Withholding TRY',
+    'Net TRY',
+    'Status',
+    'Created',
+    'Updated',
+  ];
+  const lines = e.payouts.map((p) =>
+    [
+      cell(p.id),
+      cell(p.plate ?? ''),
+      money(p.gross_kurus),
+      money(p.withholding_kurus),
+      money(p.net_kurus),
+      cell(p.status),
+      day(p.created_at),
+      day(p.updated_at),
+    ].join(';'),
+  );
+  return `\uFEFF${[head.map(cell).join(';'), ...lines].join('\r\n')}\r\n`;
+}
+
+// ---- Support ---------------------------------------------------------------------------------
+
+const CATEGORY_TEXT: Record<string, [string, string]> = {
+  payment: ['A payment', 'Bir ödeme'],
+  delivery: ['A delivery or a vehicle', 'Bir teslim ya da araç'],
+  account: ['My account', 'Hesabım'],
+  technical: ['Something doesn’t work', 'Bir şey çalışmıyor'],
+  other: ['Something else', 'Başka bir konu'],
+};
+const categoryName = (key: string) => {
+  const pair = CATEGORY_TEXT[key];
+  return pair ? L(pair[0], pair[1]) : key;
+};
+const TICKET_STATUS: Record<Ticket['status'], [string, string]> = {
+  open: ['Waiting for 2earl', '2earl’den yanıt bekleniyor'],
+  answered: ['2earl answered', '2earl yanıtladı'],
+  closed: ['Closed', 'Kapandı'],
+};
+const ticketStatus = (status: Ticket['status']) => L(...TICKET_STATUS[status]);
+
+export function supportList(nav: Nav, list: Ticket[], noticeText: string | null): string {
+  const row = (t: Ticket) =>
+    `<li class="card"><div class="card-head"><a href="/support/${attr(t.id)}">${data(t.subject)}</a>
+       <span class="status${t.status === 'answered' ? ' active' : ''}" translate="no">${esc(ticketStatus(t.status))}</span></div>
+       <p class="hint" translate="no">${esc(categoryName(t.category))} · ${clock(t.updated_at)}</p></li>`;
+  return layout(
+    'Support',
+    { ...nav, current: 'support' },
+    `${notice(noticeText)}<div translate="no"><h1>${esc(L('Support', 'Destek'))}</h1>
+     <p class="lede">${esc(L('Ask 2earl about a payment, a vehicle or your account. We answer here and send you an email to say so.', '2earl’e bir ödeme, araç ya da hesabınızla ilgili soru sorun. Yanıtı burada veririz ve e-postayla haber veririz.'))}</p>
+     <p><a class="button" href="/support/new">${icon('plus')} ${esc(L('New message', 'Yeni mesaj'))}</a></p></div>
+     ${list.length === 0 ? `<div class="panel empty" translate="no">${scene('inbox')}<p>${esc(L('No messages yet.', 'Henüz mesaj yok.'))}</p></div>` : `<ul class="cards">${list.map(row).join('')}</ul>`}
+     <p class="hint" translate="no">${esc(L('Never write your password or a code in a message. For something urgent about a vehicle you hold, call the police first.', 'Mesaja parola ya da kod yazmayın. Elinizdeki bir araçla ilgili acil bir durumda önce polisi arayın.'))}</p>`,
+  );
+}
+
+export function supportNew(
+  nav: Nav,
+  values: Record<string, string>,
+  errorText: string | null,
+): string {
+  const options = Object.keys(CATEGORY_TEXT)
+    .map(
+      (k) =>
+        `<option value="${attr(k)}"${values.category === k ? ' selected' : ''}>${esc(categoryName(k))}</option>`,
+    )
+    .join('');
+  return layout(
+    'New message',
+    { ...nav, current: 'support' },
+    `<p><a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a></p>
+     <h1 translate="no">${esc(L('New message', 'Yeni mesaj'))}</h1>
+     ${error(errorText)}
+     <form method="post" action="/support/new" class="stack" translate="no">
+       <label><span>${esc(L('What is it about?', 'Konu nedir?'))}</span> <select name="category">${options}</select></label>
+       <label><span>${esc(L('Subject', 'Başlık'))}</span> <input name="subject" required minlength="3" maxlength="120" value="${attr(values.subject ?? '')}"></label>
+       <label><span>${esc(L('Message', 'Mesaj'))}</span> <textarea name="message" required minlength="3" maxlength="4000" rows="6">${esc(values.message ?? '')}</textarea></label>
+       <button type="submit">${esc(L('Send', 'Gönder'))}</button>
+     </form>`,
+  );
+}
+
+export function supportThread(
+  nav: Nav,
+  t: TicketThread,
+  errorText: string | null,
+  noticeText: string | null,
+): string {
+  const bubble = (m: TicketThread['messages'][number]) =>
+    `<li class="card${m.author_kind === 'staff' ? ' staff' : ''}"><p class="hint" translate="no">${esc(m.author_kind === 'staff' ? L('2earl', '2earl') : L('You', 'Siz'))} · ${clock(m.created_at)}</p>
+       <p style="white-space:pre-wrap">${data(m.body)}</p></li>`;
+  const closed = t.ticket.status === 'closed';
+  return layout(
+    t.ticket.subject,
+    { ...nav, current: 'support' },
+    `${notice(noticeText)}<p><a href="/support" translate="no">${esc(L('Support', 'Destek'))}</a></p>
+     <h1>${data(t.ticket.subject)}</h1>
+     <p class="hint" translate="no">${esc(categoryName(t.ticket.category))} · ${esc(ticketStatus(t.ticket.status))}</p>
+     <ul class="cards">${t.messages.map(bubble).join('')}</ul>
+     ${error(errorText)}
+     <form method="post" action="/support/${attr(t.ticket.id)}/reply" class="stack" translate="no">
+       <label><span>${esc(closed ? L('Write again to reopen this', 'Yeniden açmak için yazın') : L('Your reply', 'Yanıtınız'))}</span> <textarea name="message" required minlength="2" maxlength="4000" rows="4"></textarea></label>
+       <button type="submit">${esc(L('Send', 'Gönder'))}</button>
+     </form>
+     ${closed ? '' : `<form method="post" action="/support/${attr(t.ticket.id)}/close" translate="no"><button class="link" type="submit">${esc(L('Close this message, it is solved', 'Bu mesajı kapat, çözüldü'))}</button></form>`}`,
   );
 }
 
