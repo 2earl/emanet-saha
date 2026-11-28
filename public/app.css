@@ -3359,3 +3359,128 @@ form.search label {
   flex: 1 1 16rem;
   max-width: 28rem;
 }
+
+/* Breadcrumb (2earl design system): a trail of parents ending in this page; on a phone, one step back. */
+.crumbs {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.crumbs ol {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crumbs li {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+}
+
+.crumbs li:last-child {
+  flex: 0 1 auto;
+}
+
+.crumbs li::before {
+  content: '';
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin: 0 0.55rem 0 0.35rem;
+  border-top: 1.75px solid var(--field);
+  border-right: 1.75px solid var(--field);
+  transform: rotate(45deg);
+}
+
+.crumbs li:first-child::before {
+  display: none;
+}
+
+.crumbs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 0.3rem;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.crumbs a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+.crumbs [aria-current] {
+  padding: 0 0.3rem;
+  color: var(--fg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .crumbs li {
+    display: none;
+  }
+
+  .crumbs li.back-to {
+    display: inline-flex;
+  }
+
+  .crumbs li.back-to::before {
+    display: block;
+    margin: 0 0.35rem 0 0.3rem;
+    transform: rotate(-135deg);
+  }
+}
+
+@media print {
+  .crumbs {
+    display: none;
+  }
+}
+
+/* The stages of a claim use the step pills; a stage is a word, not a link. */
+ol.progress li span {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+ol.progress li.done span {
+  border-color: var(--good);
+  color: var(--good);
+}
+
+ol.progress li.done span::before {
+  content: '✓ ';
+}
+
+ol.progress li.now span {
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--action-fg);
+  font-weight: 600;
+}
+
+ol.progress.stages {
+  margin: 0.25rem 0 1rem;
+}
+
+.panel.guide {
+  margin: 1rem 0 1.25rem;
+}
+
+.panel.guide ol.tracker {
+  margin-bottom: 0;
+}

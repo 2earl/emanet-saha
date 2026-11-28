@@ -661,7 +661,9 @@ export function createApp(now: () => number) {
     const result = await core(c.env).hunts(uid(c), city ? { city } : {});
     const list = result.ok ? result.value : [];
     const message = error ?? (result.ok ? null : errorText(result.error));
-    return c.html(pages.hunts(nav(c), list, city, agent(c), message, done(c)), status);
+    const mine = await core(c.env).myClaims(uid(c));
+    const first = mine.ok && mine.value.length === 0;
+    return c.html(pages.hunts(nav(c), list, city, agent(c), message, done(c), first), status);
   };
 
   app.get('/hunts', (c) => showHunts(c, null));

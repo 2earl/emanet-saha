@@ -63,6 +63,7 @@ export const tr: Catalog = {
     Earnings: 'Kazançlar',
     Account: 'Hesap',
     Help: 'Yardım',
+    Breadcrumb: 'Sayfa yolu',
     'Look for it at these places.': 'Bu yerlerde arayın.',
     'The police have been called.': 'Polis çağrıldı.',
     'Upload documents': 'Belgeleri yükle',
