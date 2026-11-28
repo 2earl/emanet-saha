@@ -3466,10 +3466,11 @@ ol.progress li.done span::before {
   content: '✓ ';
 }
 
+/* Not a button, so not filled: the current stage is tinted. */
 ol.progress li.now span {
-  border-color: var(--action);
-  background: var(--action);
-  color: var(--action-fg);
+  border-color: var(--vermilion);
+  background: var(--brand-tint);
+  color: var(--link);
   font-weight: 600;
 }
 
