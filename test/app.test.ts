@@ -420,6 +420,8 @@ describe('finding a vehicle', () => {
     expect(where).toMatch(/^\/support\/tk-\d+\?done=ticket_sent$/);
     const id = where.split('?')[0] ?? '';
     await coreHooks().testStaffReply(id.replace('/support/', ''), 'We are on it.');
+    const banner = await (await request('/earnings', { headers: { Cookie: cookie } })).text();
+    expect(banner).toContain('2earl answered your message');
     const thread = await (await request(id, { headers: { Cookie: cookie } })).text();
     expect(thread).toContain('We are on it.');
     expect(thread).toContain('2earl answered');

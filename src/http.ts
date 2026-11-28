@@ -13,7 +13,13 @@ export interface WebSession {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { session: WebSession | null; now: number; locale: Locale; agent: AgentProfile };
+  Variables: {
+    session: WebSession | null;
+    now: number;
+    locale: Locale;
+    agent: AgentProfile;
+    answers?: number;
+  };
 };
 export type AppContext = Context<AppEnv>;
 
