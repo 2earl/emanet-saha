@@ -425,19 +425,41 @@ export function createApp(now: () => number) {
     address: v.address ? v.address : null,
   });
 
+  /** Which step of the application a form belongs to: its message is shown there. */
+  const stepOf = (path: string): pages.ApplyStep =>
+    path.startsWith('/apply/email')
+      ? 'email'
+      : path.startsWith('/apply/documents')
+        ? 'documents'
+        : path.startsWith('/apply/submit')
+          ? 'send'
+          : 'about';
+  const DONE_STEP: Record<string, pages.ApplyStep> = {
+    code_sent: 'email',
+    email_confirmed: 'email',
+    saved: 'about',
+    document: 'documents',
+  };
   const applyPage = async (
     c: AppContext,
     values: Record<string, string>,
-    errorText: string | null,
+    errorCode: string | null,
     pendingEmail: string | null = null,
   ) => {
     const documents = await core(c.env).documents(uid(c));
+    const doneKey = c.req.query('done') ?? '';
     return pages.apply(
       nav(c),
       agent(c),
       values,
-      errorText,
-      done(c),
+      errorCode
+        ? {
+            text: errorText(errorCode),
+            step: stepOf(c.req.path),
+            field: pages.fieldOf(errorCode),
+          }
+        : null,
+      done(c) ? { text: done(c) ?? '', step: DONE_STEP[doneKey] ?? 'about' } : null,
       pendingEmail ?? (c.req.query('code') === '1' ? text(c.req.query('email')) : null),
       documents.ok ? documents.value : [],
     );
@@ -462,14 +484,14 @@ export function createApp(now: () => number) {
         await applyPage(
           c,
           pages.profileValues(agent(c)),
-          errorText(result.error),
+          result.error,
           result.error === 'sent_recently' ? (v.email ?? '') : null,
         ),
         422,
       );
     }
     return c.redirect(
-      `/apply?done=code_sent&code=1&email=${encodeURIComponent(result.value.email)}`,
+      `/apply?done=code_sent&code=1&email=${encodeURIComponent(result.value.email)}#email`,
       303,
     );
   });
@@ -484,29 +506,26 @@ export function createApp(now: () => number) {
         await applyPage(
           c,
           pages.profileValues(agent(c)),
-          errorText(result.error),
+          result.error,
           result.error === 'wrong_code' ? (v.email ?? '') : null,
         ),
         422,
       );
     }
-    return c.redirect('/apply?done=email_confirmed', 303);
+    return c.redirect('/apply?done=email_confirmed#about', 303);
   });
 
   app.post('/apply/profile', async (c) => {
     const v = await formValues(c);
     const result = await core(c.env).updateProfile(uid(c), profileInput(v));
-    if (!result.ok) return c.html(await applyPage(c, v, errorText(result.error)), 422);
-    return c.redirect('/apply?done=saved', 303);
+    if (!result.ok) return c.html(await applyPage(c, v, result.error), 422);
+    return c.redirect('/apply?done=saved#documents', 303);
   });
 
   app.post('/apply/submit', async (c) => {
     const v = await formValues(c);
     if (v.accept !== '1' || v.notice !== '1' || v.consent !== '1') {
-      return c.html(
-        await applyPage(c, pages.profileValues(agent(c)), errorText('consents_missing')),
-        422,
-      );
+      return c.html(await applyPage(c, pages.profileValues(agent(c)), 'consents_missing'), 422);
     }
     const result = await core(c.env).submit(
       uid(c),
@@ -515,10 +534,7 @@ export function createApp(now: () => number) {
       c.get('locale'),
     );
     if (!result.ok) {
-      return c.html(
-        await applyPage(c, pages.profileValues(agent(c)), errorText(result.error)),
-        422,
-      );
+      return c.html(await applyPage(c, pages.profileValues(agent(c)), result.error), 422);
     }
     return c.redirect('/status?done=submitted', 303);
   });
@@ -532,13 +548,13 @@ export function createApp(now: () => number) {
     const barcode = text(form.barcode);
     const values = pages.profileValues(agent(c));
     if (!DOCUMENT_KINDS.includes(kind as (typeof DOCUMENT_KINDS)[number])) {
-      return c.html(await applyPage(c, values, errorText('invalid_document')), 422);
+      return c.html(await applyPage(c, values, 'invalid_document'), 422);
     }
     const file = await readDocument(form.file);
-    if (!file.ok) return c.html(await applyPage(c, values, errorText(file.error)), 422);
+    if (!file.ok) return c.html(await applyPage(c, values, file.error), 422);
     const stored = await storeDocument(c.env, uid(c), kind, barcode, file.value);
-    if (!stored.ok) return c.html(await applyPage(c, values, errorText(stored.error)), 422);
-    return c.redirect('/apply?done=document', 303);
+    if (!stored.ok) return c.html(await applyPage(c, values, stored.error), 422);
+    return c.redirect('/apply?done=document#documents', 303);
   });
 
   app.get('/status', (c) => {
@@ -556,7 +572,17 @@ export function createApp(now: () => number) {
     const v = await formValues(c);
     const result = await core(c.env).updateProfile(uid(c), profileInput(v));
     if (!result.ok)
-      return c.html(pages.account(nav(c), agent(c), v, errorText(result.error), null), 422);
+      return c.html(
+        pages.account(
+          nav(c),
+          agent(c),
+          v,
+          errorText(result.error),
+          null,
+          pages.fieldOf(result.error),
+        ),
+        422,
+      );
     return c.redirect('/account?done=saved', 303);
   });
 
