@@ -60,12 +60,13 @@ seed();
 const log = (method, args) => s.calls.push([method, ...args]);
 function agentFor(id) {
   if (!s.agents.has(id)) {
-    const status = id.startsWith('active-') ? 'active' : id.startsWith('pending-') ? 'kyc_pending' : null;
+    const status = id.startsWith('active-') ? 'active' : id.startsWith('pending-') ? 'kyc_pending' : id.startsWith('returned-') ? 'applied' : null;
     if (status === null) return null;
     s.agents.set(id, { status, legal_name: 'Ayşe Yılmaz', city: 'İzmir', phone: '+905321234567',
       iban: 'TR330006100519786457841326', iban_verified: status === 'active', tax_profile: 'individual',
       vkn: null, terms_version: TERMS, current_terms: TERMS, submitted_at: now() - 60, strikes: 0, open_claims: 0,
-      email: 'ayse@example.com', id_given: true, birth_year: 1990 });
+      email: 'ayse@example.com', id_given: true, birth_year: 1990,
+      review_note: status === 'applied' ? 'The IBAN is not in your own name.' : null });
   }
   return s.agents.get(id);
 }

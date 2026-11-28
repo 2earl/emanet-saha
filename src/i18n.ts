@@ -580,7 +580,8 @@ export function localizeHtml(html: string, locale: Locale): string {
       if (t.kind === 'tag' && t.close && t.name === raw) raw = null;
       continue;
     }
-    if (t.kind === 'tag' && RAW.has(t.name) && !t.close) {
+    // A <pre> inside an element kept whole belongs to it; only one outside opens raw text.
+    if (t.kind === 'tag' && RAW.has(t.name) && !t.close && !(run.length > 0 && inOpaque(run))) {
       flush();
       out += t.text;
       raw = t.name;
