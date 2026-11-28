@@ -382,6 +382,13 @@ describe('finding a vehicle', () => {
     expect(statement).toContain('Payment statement');
     expect(statement).toContain('not an invoice or a tax document');
     expect(statement).toContain('1326');
+    expect(statement).toContain('about=06AB123%20po-1');
+    const prefilled = await (
+      await request('/support/new?category=payment&about=06AB123%20po-1', {
+        headers: { Cookie: cookie },
+      })
+    ).text();
+    expect(prefilled).toContain('value="06AB123 po-1"');
     expect(statement).not.toContain('TR330006100519786457841326');
     expect((await request('/earnings/other', { headers: { Cookie: cookie } })).status).toBe(404);
     const csv = await request('/earnings.csv', { headers: { Cookie: cookie } });

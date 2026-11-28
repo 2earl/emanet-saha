@@ -822,7 +822,7 @@ export function statement(nav: Nav, p: Earnings['payouts'][number], profile: Age
      </dl></div>
      <p class="hint" translate="no">${esc(STATEMENT_NOTE())}</p>
      <p class="hint noprint" translate="no">${esc(L('To keep a copy, use your browser’s Print and choose Save as PDF.', 'Kopyasını saklamak için tarayıcınızın Yazdır seçeneğinde PDF olarak kaydet’i seçin.'))}</p>
-     <p class="noprint"><a href="/support/new?category=payment" translate="no">${esc(L('Question about this payment?', 'Bu ödemeyle ilgili sorunuz mu var?'))}</a></p>`,
+     <p class="noprint"><a href="/support/new?category=payment&amp;about=${encodeURIComponent(`${p.plate ?? ''} ${p.id}`.trim())}" translate="no">${esc(L('Question about this payment?', 'Bu ödemeyle ilgili sorunuz mu var?'))}</a></p>`,
   );
 }
 
