@@ -656,7 +656,7 @@ export function createApp(now: () => number) {
   });
 
   app.get('/claims', async (c) =>
-    c.html(pages.claims(nav(c), unwrap(await core(c.env).myClaims(uid(c))), done(c))),
+    c.html(pages.claims(nav(c), unwrap(await core(c.env).myClaims(uid(c))), done(c), c.get('now'))),
   );
 
   const showClaim = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {

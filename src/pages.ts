@@ -507,6 +507,25 @@ export function waiting(nav: Nav, profile: AgentProfile): string {
 
 // ---- Hunts -----------------------------------------------------------------------------------------
 
+/** How long a claim still runs, in the reader's language: "5 h 20 min left". */
+function timeLeft(expires: number, now: number): string {
+  const minutes = Math.max(0, Math.floor((expires - now) / 60));
+  if (minutes === 0) return L('Time is up', 'Süre doldu');
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const text =
+    h > 0
+      ? `${String(h)} ${L('h', 'sa')} ${String(m)} ${L('min', 'dk')}`
+      : `${String(m)} ${L('min', 'dk')}`;
+  return L(`${text} left`, `${text} kaldı`);
+}
+
+/** The documents an agent must upload (the police report is optional): how many are in. */
+function requiredProgress(have: ReadonlySet<EvidenceKind>): { done: number; total: number } {
+  const required = STEPS.filter((s) => !s.optional);
+  return { done: required.filter((s) => have.has(s.kind)).length, total: required.length };
+}
+
 export function hunts(
   nav: Nav,
   list: Hunt[],
@@ -631,6 +650,7 @@ export function claim(
     })
     .join('');
   const have = new Set(mine?.evidence ?? []);
+  const progress = requiredProgress(have);
   // The sighting was recorded but its photo wasn't stored (a lost connection, a photo used
   // before): without it staff can't confirm the delivery, so it is asked for again first.
   const scene =
@@ -640,6 +660,7 @@ export function claim(
   const steps =
     c.state === 'reporting'
       ? `${scene}<h2>After the police</h2>
+         <p class="hint" translate="no">${esc(L(`${String(progress.done)} of ${String(progress.total)} required documents uploaded`, `Gerekli ${String(progress.total)} belgeden ${String(progress.done)} tanesi yüklendi`))}</p>
          <ol class="steps">${STEPS.map((s) => {
            const done = have.has(s.kind);
            return `<li class="${done ? 'done' : ''}">
@@ -656,7 +677,8 @@ export function claim(
     `${notice(noticeText)}
      <p>${plate(d.plate, 'large')}</p>
      <h1>${data([d.make, d.model, d.year === null ? '' : String(d.year), d.colour ?? ''].filter(Boolean).join(' · '))}</h1>
-     <p class="lede">Yours until ${clock(c.expires_at)}. ${c.state === 'reporting' ? 'The police have been called.' : 'Look for it at these places.'}</p>
+     <p class="lede">Yours until ${clock(c.expires_at)} <span class="status active" translate="no">${esc(timeLeft(c.expires_at, now))}</span></p>
+     <p class="hint">${c.state === 'reporting' ? 'The police have been called.' : 'Look for it at these places.'}</p>
      ${error(errorText)}
      <section class="confidential">
        ${watermark}
@@ -667,10 +689,11 @@ export function claim(
      ${steps}
      ${
        c.state === 'searching'
-         ? `<form method="post" action="/claims/${attr(c.id)}/release" class="actions">
-             <button class="secondary" type="submit">Give this vehicle up</button>
-           </form>
-           <p class="hint">Someone else can then look for it. You can’t take it again for a while.</p>`
+         ? `<details class="giveup" translate="no"><summary>${esc(L('Give this vehicle up', 'Bu araçtan vazgeç'))}</summary>
+             <p>${esc(L('Someone else can then look for it. You can’t take it again for a while.', 'Bu durumda başka biri onu arayabilir. Bir süre onu yeniden alamazsınız.'))}</p>
+             <form method="post" action="/claims/${attr(c.id)}/release" class="actions">
+               <button class="secondary" type="submit">${esc(L('Yes, give it up', 'Evet, vazgeç'))}</button>
+             </form></details>`
          : ''
      }`,
   );
@@ -735,7 +758,7 @@ const PAYOUT_TEXT: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
-export function claims(nav: Nav, list: MyClaim[], noticeText: string | null): string {
+export function claims(nav: Nav, list: MyClaim[], noticeText: string | null, now: number): string {
   const row = (c: MyClaim) => {
     const status =
       c.closed_at === null
@@ -751,9 +774,10 @@ export function claims(nav: Nav, list: MyClaim[], noticeText: string | null): st
     return `<li class="card">
       <div class="card-head">${plate(c.plate)}<span class="status${open ? ' active' : ''}">${status}</span></div>
       <p>${data(`${c.make} ${c.model}`)}</p>
-      <p class="hint">${open ? `Until ${clock(c.expires_at)}` : `Since ${clock(c.closed_at ?? c.claimed_at)}`}</p>
+      <p class="hint">${open ? `Until ${clock(c.expires_at)} · <span translate="no">${esc(timeLeft(c.expires_at, now))}</span>` : `Since ${clock(c.closed_at ?? c.claimed_at)}`}</p>
+      ${open && c.state === 'reporting' ? `<p class="hint" translate="no">${esc(L(`${String(requiredProgress(new Set(c.evidence)).done)} of ${String(requiredProgress(new Set(c.evidence)).total)} required documents uploaded`, `Gerekli ${String(requiredProgress(new Set(c.evidence)).total)} belgeden ${String(requiredProgress(new Set(c.evidence)).done)} tanesi yüklendi`))}</p>` : ''}
       ${!open && c.close_reason === 'rejected' && c.close_note ? `<p class="hint">Why it wasn’t accepted: ${data(c.close_note)}</p>` : ''}
-      ${open ? `<p><a href="/claims/${attr(c.id)}">Open</a></p>` : ''}
+      ${open ? `<p><a class="button" href="/claims/${attr(c.id)}">${c.state === 'reporting' ? 'Upload documents' : 'Continue'}</a></p>` : ''}
     </li>`;
   };
   return layout(

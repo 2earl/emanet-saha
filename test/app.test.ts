@@ -344,6 +344,18 @@ describe('finding a vehicle', () => {
     expect(list).toContain('The receipt shows another plate');
   });
 
+  it('shows how long a claim runs and asks twice before giving it up', async () => {
+    const cookie = await signIn('active-1');
+    const id = await claimed(cookie);
+    const page = await (await request(`/claims/${id}`, { headers: { Cookie: cookie } })).text();
+    expect(page).toMatch(/\d+ (h \d+ min|min) left/);
+    expect(page).toContain('<details class="giveup"');
+    expect(page).toContain('Yes, give it up');
+    const mine = await (await request('/claims', { headers: { Cookie: cookie } })).text();
+    expect(mine).toMatch(/\d+ (h \d+ min|min) left/);
+    expect(mine).toContain('Continue');
+  });
+
   it('gives a vehicle up', async () => {
     const cookie = await signIn('active-1');
     const id = await claimed(cookie);

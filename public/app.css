@@ -2938,3 +2938,12 @@ button.danger {
 .card.staff {
   border-left: 4px solid var(--accent, #f15a24);
 }
+
+/* Giving a vehicle up asks twice: the summary opens the warning and the button. */
+details.giveup {
+  margin-top: 1.5rem;
+}
+details.giveup summary {
+  cursor: pointer;
+  color: var(--muted, inherit);
+}
