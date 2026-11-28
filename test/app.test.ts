@@ -81,7 +81,7 @@ describe('joining', () => {
     expect(await taken.text()).toContain('belongs to another agent');
     const asked = await post('/apply/email', cookie, { email: 'Ayse@Example.com' });
     expect(asked.headers.get('Location')).toBe(
-      '/apply?done=code_sent&code=1&email=ayse%40example.com',
+      '/apply?done=code_sent&code=1&email=ayse%40example.com#email',
     );
     expect((await callsOf('requestEmailCode')).at(-1)).toEqual([
       'new-1',
@@ -98,7 +98,7 @@ describe('joining', () => {
     expect(wrong.status).toBe(422);
     expect(await wrong.text()).toContain('isn’t the code we sent');
     const confirmed = await post('/apply/email/confirm', cookie, { code: '123456' });
-    expect(confirmed.headers.get('Location')).toBe('/apply?done=email_confirmed');
+    expect(confirmed.headers.get('Location')).toBe('/apply?done=email_confirmed#about');
     // Step 2: details, with the ID number.
     const details = {
       legal_name: 'Ayşe Yılmaz',
@@ -115,13 +115,20 @@ describe('joining', () => {
       tckn: '10000000078',
     });
     expect(bad.status).toBe(422);
-    expect(await bad.text()).toContain('IBAN isn’t valid');
+    const badPage = await bad.text();
+    expect(badPage).toContain('IBAN isn’t valid');
+    // The message is in the step it is about, and the wrong field is marked.
+    expect(badPage).toMatch(
+      /id="about">[\s\S]*IBAN isn’t valid[\s\S]*name="iban" aria-invalid="true" autofocus/,
+    );
+    expect(badPage).toContain('action="/apply/profile#about"');
+    expect(badPage).toContain('class="progress"');
     const noId = await post('/apply/profile', cookie, details);
     expect(await noId.text()).toContain('T.C. kimlik no');
     const second = await post('/apply/profile', cookie, { ...details, tckn: '10000000146' });
     expect(await second.text()).toContain('One person, one account');
     const saved = await post('/apply/profile', cookie, { ...details, tckn: '10000000078' });
-    expect(saved.headers.get('Location')).toBe('/apply?done=saved');
+    expect(saved.headers.get('Location')).toBe('/apply?done=saved#documents');
     expect((await callsOf('updateProfile')).at(-1)?.[1]).toMatchObject({
       tckn: '10000000078',
       birthYear: 1990,
@@ -144,7 +151,7 @@ describe('joining', () => {
     expect((await send('passport', pdf, 'ABC-123456')).status).toBe(422);
     expect((await send('criminal_record', pdf, '!')).status).toBe(422);
     expect((await send('criminal_record', pdf, 'ABC-123456')).headers.get('Location')).toBe(
-      '/apply?done=document',
+      '/apply?done=document#documents',
     );
     expect((await send('population_record', pdf, 'NVI-987654')).status).toBe(303);
     expect((await callsOf('addDocument')).at(-1)).toEqual([

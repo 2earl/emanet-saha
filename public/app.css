@@ -2947,3 +2947,44 @@ details.giveup summary {
   cursor: pointer;
   color: var(--muted, inherit);
 }
+
+/* The application's steps at a glance: done, where you are, still to come. */
+ol.progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  list-style: none;
+}
+ol.progress li a {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+ol.progress li.done a {
+  border-color: var(--good);
+  color: var(--good);
+}
+ol.progress li.done a::before {
+  content: '✓ ';
+}
+ol.progress li.now a {
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--action-ink);
+}
+.step.now {
+  border-color: var(--action);
+}
+/* A field the last answer was about. */
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--bad, #b42318);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad, #b42318) 25%, transparent);
+}

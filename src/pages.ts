@@ -300,7 +300,7 @@ function documentsStep(documents: AgentDocument[], ready: boolean): string {
     const form =
       have?.status === 'verified'
         ? ''
-        : `<form method="post" action="/apply/documents" enctype="multipart/form-data" class="stack">
+        : `<form method="post" action="/apply/documents#documents" enctype="multipart/form-data" class="stack">
              <input type="hidden" name="kind" value="${kind}">
              <label>${esc(L('The document (PDF from e-Devlet)', 'Belge (e-Devlet’ten alınan PDF)'))} <input type="file" name="file" accept="application/pdf,image/*" required></label>
              <label>${esc(L('Barcode number on the document', 'Belgedeki barkod numarası'))} <input name="barcode" required maxlength="40" autocomplete="off" spellcheck="false" value="${attr(have?.barcode ?? '')}">
@@ -370,12 +370,41 @@ export function agreementPage(
 const stamp = (unix: number) =>
   new Date((unix + 3 * 3600) * 1000).toISOString().slice(0, 16).replace('T', ' ');
 
+export type ApplyStep = 'email' | 'about' | 'documents' | 'rules' | 'send';
+
+/** The form field an error is about, so the page can mark it and put the cursor there. */
+const FIELD_OF: Record<string, string> = {
+  invalid_name: 'legal_name',
+  identity_not_confirmed: 'legal_name',
+  invalid_city: 'city',
+  invalid_phone: 'phone',
+  phone_taken: 'phone',
+  invalid_iban: 'iban',
+  invalid_vkn: 'vkn',
+  invalid_tckn: 'tckn',
+  tckn_taken: 'tckn',
+  invalid_birth_year: 'birth_year',
+  invalid_address: 'address',
+  invalid_email: 'email',
+  email_taken: 'email',
+  wrong_code: 'code',
+  code_expired: 'code',
+  invalid_barcode: 'barcode',
+};
+export const fieldOf = (code: string): string | null => FIELD_OF[code] ?? null;
+
+/** Marks one field as wrong: screen readers announce it, the cursor goes there. */
+function markField(html: string, field: string | null): string {
+  if (!field) return html;
+  return html.replace(`name="${field}"`, `name="${field}" aria-invalid="true" autofocus`);
+}
+
 export function apply(
   nav: Nav,
   profile: AgentProfile,
   values: Record<string, string>,
-  errorText: string | null,
-  noticeText: string | null,
+  problem: { text: string; step: ApplyStep; field: string | null } | null,
+  saved: { text: string; step: ApplyStep } | null,
   /** The address a code was just mailed to, while the agent types the code. */
   pendingEmail: string | null = null,
   documents: AgentDocument[] = [],
@@ -392,61 +421,92 @@ export function apply(
   const hasDocuments = DOCUMENT_KINDS.every((kind) =>
     documents.some((d) => d.kind === kind && d.status !== 'rejected'),
   );
+  const finished = { email: hasEmail, about: hasDetails, documents: hasDocuments };
+  // The first step not yet done is where the applicant is.
+  const current: ApplyStep = !hasEmail
+    ? 'email'
+    : !hasDetails
+      ? 'about'
+      : !hasDocuments
+        ? 'documents'
+        : 'send';
   // The step's number is drawn by the stylesheet (a counter), so the heading is only its words.
-  const step = (title: string, done: boolean, body: string) =>
-    `<section class="step${done ? ' done' : ''}">
+  // Its message (an error, or what was just saved) is shown inside it, where the form is.
+  const step = (id: ApplyStep, title: string, done: boolean, body: string) =>
+    `<section class="step${done ? ' done' : ''}${current === id ? ' now' : ''}" id="${id}">
        <h2>${title}</h2>
        ${done ? '<p><span class="status active">Done</span></p>' : ''}
-       ${body}
+       ${saved?.step === id ? notice(saved.text) : ''}
+       ${problem?.step === id ? error(problem.text) : ''}
+       ${problem?.step === id ? markField(body, problem.field) : body}
      </section>`;
+  const progress = (['email', 'about', 'documents'] as const).filter((k) => finished[k]).length;
+  const map = `<ol class="progress" translate="no" aria-label="${attr(L('Your application', 'Başvurunuz'))}">
+      ${(
+        [
+          ['email', L('Email', 'E-posta')],
+          ['about', L('About you', 'Bilgileriniz')],
+          ['documents', L('Documents', 'Belgeler')],
+          ['send', L('Rules and send', 'Kurallar ve gönderim')],
+        ] as const
+      )
+        .map(
+          ([id, label]) =>
+            `<li class="${id !== 'send' && finished[id] ? 'done' : current === id ? 'now' : ''}"><a href="#${id}"${current === id ? ' aria-current="step"' : ''}>${esc(label)}</a></li>`,
+        )
+        .join('')}
+    </ol>
+    <p class="hint" translate="no">${esc(L(`${String(progress)} of 3 steps done. Everything you save is kept; you can stop and come back.`, `3 adımdan ${String(progress)} tanesi tamam. Kaydettiğiniz her şey saklanır; ara verip geri dönebilirsiniz.`))}</p>`;
   const email = hasEmail
     ? `<p>${data(profile.email ?? '')}</p>`
     : pendingEmail
       ? `<p>We sent a six-digit code to ${data(pendingEmail)}.</p>
-         <form method="post" action="/apply/email/confirm" class="stack">
+         <form method="post" action="/apply/email/confirm#email" class="stack">
            <input type="hidden" name="email" value="${attr(pendingEmail)}">
            <label>Code <input name="code" required inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" autocomplete="one-time-code" autofocus></label>
            <div><button type="submit">Confirm</button></div>
          </form>
-         <form method="post" action="/apply/email" class="actions">
+         <form method="post" action="/apply/email#email" class="actions">
            <input type="hidden" name="email" value="${attr(pendingEmail)}">
            <button class="link" type="submit">Send a new code</button>
            <a href="/apply">Use another address</a>
          </form>`
       : `<p class="hint">We write to you here about your application and your payments.</p>
-         <form method="post" action="/apply/email" class="stack">
+         <form method="post" action="/apply/email#email" class="stack">
            <label>Email address <input name="email" type="email" required maxlength="254" autocomplete="email"></label>
            <div><button type="submit">Send me a code</button></div>
          </form>`;
   return layout(
     'Join',
     nav,
-    `${notice(noticeText)}<h1>Become an agent</h1>
+    `<h1>Become an agent</h1>
      ${
        profile.review_note
          ? `<div class="callout returned" translate="no">${icon('info')}<div><strong>${esc(L('We need one thing corrected', 'Bir düzeltme gerekiyor'))}</strong><p>${esc(profile.review_note)}</p><p class="hint">${esc(L('Correct your details below and send the application again. Nothing you entered is lost.', 'Bilgilerinizi aşağıda düzeltip başvurunuzu yeniden gönderin. Girdiğiniz hiçbir şey kaybolmadı.'))}</p>${profile.requests_open ? `<p><a class="button secondary" href="/requests">${esc(L('See what we asked for', 'Sizden istenenleri görün'))}</a></p>` : ''}</div></div>`
          : ''
      }
      <p class="lede" translate="no">${esc(L('Five steps here, then a short video call with your ID card. One person, one account.', 'Burada beş adım, ardından kimlik kartınızla kısa bir görüntülü görüşme. Bir kişi, bir hesap.'))}</p>
-     ${error(errorText)}
-     ${step('Your email address', hasEmail, email)}
+     ${map}
+     ${step('email', 'Your email address', hasEmail, email)}
      ${step(
+       'about',
        'About you',
        hasDetails,
-       `<form method="post" action="/apply/profile" class="stack">
+       `<form method="post" action="/apply/profile#about" class="stack">
           ${profileFields(values, false)}
           <div><button type="submit"${hasDetails ? ' class="secondary"' : ''}>Save</button></div>
         </form>`,
      )}
-     ${step(both('Your e-Devlet documents', 'e-Devlet belgeleriniz'), hasDocuments, documentsStep(documents, hasDetails))}
-     ${step('The rules', false, `${rulesList()}<p translate="no"><a href="/agreement">${esc(L('Read the full agent agreement, the privacy notice and the consent text', 'Saha görevlisi sözleşmesinin, aydınlatma metninin ve açık rıza metninin tamamını okuyun'))}</a></p>`)}
+     ${step('documents', both('Your e-Devlet documents', 'e-Devlet belgeleriniz'), hasDocuments, documentsStep(documents, hasDetails))}
+     ${step('rules', 'The rules', false, `${rulesList()}<p translate="no"><a href="/agreement">${esc(L('Read the full agent agreement, the privacy notice and the consent text', 'Saha görevlisi sözleşmesinin, aydınlatma metninin ve açık rıza metninin tamamını okuyun'))}</a></p>`)}
      ${step(
+       'send',
        'Send your application',
        false,
        profile.requests_open
          ? `<p class="panel" translate="no">${esc(L('Answer what we asked for first.', 'Önce sizden istenenleri yanıtlayın.'))} <a href="/requests">${esc(L('See the list', 'Listeyi görün'))}</a></p>`
          : hasEmail && hasDetails && hasDocuments
-           ? `<form method="post" action="/apply/submit" class="stack">
+           ? `<form method="post" action="/apply/submit#send" class="stack">
              <input type="hidden" name="terms" value="${attr(profile.current_terms)}">
              <div translate="no" class="consents">
                <label class="check"><input type="checkbox" name="accept" value="1" required> <span>${L('I have read and accept the <a href="/agreement#agreement">Field Agent Agreement</a> and the rules above. I work independently, I never touch a vehicle or speak to its owner, and I am responsible for my own acts.', '<a href="/agreement#agreement">Saha Görevlisi Sözleşmesi</a>’ni ve yukarıdaki kuralları okudum, kabul ediyorum. Bağımsız çalışırım, araca asla dokunmam, sahibiyle konuşmam ve kendi eylemlerimden sorumluyum.')}</span></label>
@@ -553,6 +613,7 @@ export function hunts(
     'Vehicles',
     { ...nav, current: 'hunts' },
     `${notice(noticeText)}<h1>Vehicles to find</h1>
+     ${profile.open_claims > 0 ? `<p class="panel" translate="no">${esc(L(profile.open_claims === 1 ? 'You are looking for one vehicle.' : `You are looking for ${String(profile.open_claims)} vehicles.`, profile.open_claims === 1 ? 'Bir aracı arıyorsunuz.' : `${String(profile.open_claims)} aracı arıyorsunuz.`))} <a href="/claims">${esc(L('Go to My work', 'İşlerime git'))}</a></p>` : ''}
      ${error(errorText)}
      <form method="get" action="/hunts" class="inline">
        <label>City <input name="city" maxlength="40" value="${attr(city ?? profile.city ?? '')}"></label>
@@ -987,6 +1048,8 @@ export function account(
   values: Record<string, string>,
   errorText: string | null,
   noticeText: string | null,
+  /** The field the error is about, marked for the reader. */
+  field: string | null = null,
 ): string {
   const locked = profile.status === 'active';
   return layout(
@@ -1001,7 +1064,7 @@ export function account(
      </dl></div>
      ${error(errorText)}
      <form method="post" action="/account" class="stack">
-       ${profileFields(values, locked)}
+       ${markField(profileFields(values, locked), field)}
        ${locked ? '<p class="hint">Your name, city and tax details were checked; to change them, contact 2earl. A new IBAN has to be checked again before you are paid.</p>' : ''}
        <div><button type="submit">Save</button></div>
      </form>
