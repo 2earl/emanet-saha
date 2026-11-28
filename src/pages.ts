@@ -1,5 +1,14 @@
-import type { Acceptance, AgentDocument, AgreementBundle, AgreementText } from './core';
-import { DOCUMENT_KINDS } from './core';
+import type {
+  Acceptance,
+  AgentDocument,
+  AgentRequest,
+  AgreementBundle,
+  AgreementText,
+  DocumentKind,
+  ErasureView,
+  InfoSubject,
+} from './core';
+import { BARCODED, DOCUMENT_KINDS } from './core';
 import type {
   AgentProfile,
   ClaimDetails,
@@ -46,6 +55,10 @@ export interface Nav {
   signedIn: boolean;
   active?: boolean;
   current?: Section;
+  /** Things staff asked for that wait for this agent: shown on every page until answered. */
+  requests?: number;
+  /** The page that lists them doesn't announce itself. */
+  quiet?: boolean;
 }
 
 export function plate(value: string | null, size: '' | 'large' = ''): string {
@@ -106,11 +119,16 @@ ${options.script ? '<script src="/app.js" defer></script>' : ''}
   ${sections}
 </header>
 <main id="main">
+${
+  nav.requests && !nav.quiet
+    ? `<a class="ask-banner" href="/requests" translate="no">${icon('info')}<span><strong>${esc(L(nav.requests === 1 ? 'We need one thing from you' : `We need ${String(nav.requests)} things from you`, nav.requests === 1 ? 'Sizden bir şey bekliyoruz' : `Sizden ${String(nav.requests)} şey bekliyoruz`))}</strong> ${esc(L('See what and answer', 'Ne olduğunu görün ve yanıtlayın'))}</span></a>`
+    : ''
+}
 ${body}
 </main>
 <footer>
   <span>Emanet finds vehicles and tells the police. Agents never touch, tow or follow anyone.</span>
-  <span><a href="/terms">Rules for agents</a> · <a href="/agreement" translate="no">${esc(L('Agreement', 'Sözleşme'))}</a> · <a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
+  <span><a href="/terms">Rules for agents</a> · <a href="/agreement" translate="no">${esc(L('Agreement', 'Sözleşme'))}</a> · ${nav.signedIn ? `<a href="/privacy" translate="no">${esc(L('My data', 'Verilerim'))}</a> · ` : ''}<a href="https://emanet.dev/gizlilik">Privacy notice</a> · <a href="https://emanet.dev/kullanim-sartlari">Terms of use</a> · <a href="mailto:iletisim@emanet.dev">Contact</a></span>
   ${languageSwitcher()}
 </footer>
 </body>
@@ -396,7 +414,7 @@ export function apply(
     `${notice(noticeText)}<h1>Become an agent</h1>
      ${
        profile.review_note
-         ? `<div class="callout returned" translate="no">${icon('info')}<div><strong>${esc(L('We need one thing corrected', 'Bir düzeltme gerekiyor'))}</strong><p>${esc(profile.review_note)}</p><p class="hint">${esc(L('Correct your details below and send the application again. Nothing you entered is lost.', 'Bilgilerinizi aşağıda düzeltip başvurunuzu yeniden gönderin. Girdiğiniz hiçbir şey kaybolmadı.'))}</p></div></div>`
+         ? `<div class="callout returned" translate="no">${icon('info')}<div><strong>${esc(L('We need one thing corrected', 'Bir düzeltme gerekiyor'))}</strong><p>${esc(profile.review_note)}</p><p class="hint">${esc(L('Correct your details below and send the application again. Nothing you entered is lost.', 'Bilgilerinizi aşağıda düzeltip başvurunuzu yeniden gönderin. Girdiğiniz hiçbir şey kaybolmadı.'))}</p>${profile.requests_open ? `<p><a class="button secondary" href="/requests">${esc(L('See what we asked for', 'Sizden istenenleri görün'))}</a></p>` : ''}</div></div>`
          : ''
      }
      <p class="lede" translate="no">${esc(L('Five steps here, then a short video call with your ID card. One person, one account.', 'Burada beş adım, ardından kimlik kartınızla kısa bir görüntülü görüşme. Bir kişi, bir hesap.'))}</p>
@@ -415,8 +433,10 @@ export function apply(
      ${step(
        'Send your application',
        false,
-       hasEmail && hasDetails && hasDocuments
-         ? `<form method="post" action="/apply/submit" class="stack">
+       profile.requests_open
+         ? `<p class="panel" translate="no">${esc(L('Answer what we asked for first.', 'Önce sizden istenenleri yanıtlayın.'))} <a href="/requests">${esc(L('See the list', 'Listeyi görün'))}</a></p>`
+         : hasEmail && hasDetails && hasDocuments
+           ? `<form method="post" action="/apply/submit" class="stack">
              <input type="hidden" name="terms" value="${attr(profile.current_terms)}">
              <div translate="no" class="consents">
                <label class="check"><input type="checkbox" name="accept" value="1" required> <span>${L('I have read and accept the <a href="/agreement#agreement">Field Agent Agreement</a> and the rules above. I work independently, I never touch a vehicle or speak to its owner, and I am responsible for my own acts.', '<a href="/agreement#agreement">Saha Görevlisi Sözleşmesi</a>’ni ve yukarıdaki kuralları okudum, kabul ediyorum. Bağımsız çalışırım, araca asla dokunmam, sahibiyle konuşmam ve kendi eylemlerimden sorumluyum.')}</span></label>
@@ -426,7 +446,7 @@ export function apply(
              </div>
              <div><button type="submit">Send my application</button></div>
            </form>`
-         : `<p class="panel" translate="no">${esc(!hasEmail ? L('Confirm your email address and save your details first.', 'Önce e-posta adresinizi doğrulayın ve bilgilerinizi kaydedin.') : !hasDetails ? L('Save your details, with your address, first.', 'Önce bilgilerinizi adresinizle birlikte kaydedin.') : L('Upload both documents first.', 'Önce iki belgeyi de yükleyin.'))}</p>`,
+           : `<p class="panel" translate="no">${esc(!hasEmail ? L('Confirm your email address and save your details first.', 'Önce e-posta adresinizi doğrulayın ve bilgilerinizi kaydedin.') : !hasDetails ? L('Save your details, with your address, first.', 'Önce bilgilerinizi adresinizle birlikte kaydedin.') : L('Upload both documents first.', 'Önce iki belgeyi de yükleyin.'))}</p>`,
      )}
      <h2>What happens next</h2>
      <ol class="rules">
@@ -469,7 +489,9 @@ export function waiting(nav: Nav, profile: AgentProfile): string {
       : profile.status === 'suspended'
         ? `<h1>Your account is suspended</h1><p class="lede">You can’t hold vehicles at the moment. 2earl will contact you.</p>
            <p class="panel" translate="no">${esc(L('The reason was sent to your email address. Payment for deliveries already confirmed is not affected. To object, reply to that email.', 'Gerekçe e-posta adresinize gönderildi. Onaylanmış teslimlerinizin ödemesi bundan etkilenmez. İtiraz etmek için o e-postayı yanıtlayın.'))}</p>`
-        : `<h1>Your account is closed</h1><p class="lede">You can no longer work as an agent.</p>`;
+        : profile.erased
+          ? `<div translate="no"><h1>${esc(L('Your data was erased', 'Verileriniz silindi'))}</h1><p class="lede">${esc(L('This Emanet Saha account is closed and your personal data was removed from it. Records the law requires us to keep stay until their period ends.', 'Bu Emanet Saha hesabı kapatıldı ve kişisel verileriniz hesaptan kaldırıldı. Mevzuat gereği saklanması zorunlu kayıtlar süresi dolana kadar tutulur.'))}</p><p><a href="/agreement#notice">${esc(L('Privacy notice', 'Aydınlatma metni'))}</a></p></div>`
+          : `<h1>Your account is closed</h1><p class="lede">You can no longer work as an agent.</p>`;
   return layout(STATUS_TEXT[profile.status], nav, body);
 }
 
@@ -780,6 +802,220 @@ export function account(
        ${locked ? '<p class="hint">Your name, city and tax details were checked; to change them, contact 2earl. A new IBAN has to be checked again before you are paid.</p>' : ''}
        <div><button type="submit">Save</button></div>
      </form>
+     <p translate="no"><a href="/privacy">${esc(L('My data', 'Verilerim'))}</a>: ${esc(L('what Emanet holds about you, and asking for it to be erased.', 'Emanet’in hakkınızda tuttukları ve silinmesini isteme.'))}</p>
      <p><a href="https://login.2earl.com/account">Your 2earl account</a>: sign-in, your data, deleting your account.</p>`,
+  );
+}
+
+// ---- What staff asked for --------------------------------------------------------------------------
+
+const DOCUMENT_NAME: Record<DocumentKind, [string, string]> = {
+  criminal_record: ['Criminal record (adli sicil kaydı)', 'Adli sicil kaydı'],
+  population_record: ['Population register extract (nüfus kayıt örneği)', 'Nüfus kayıt örneği'],
+  residence_record: [
+    'Residence record (yerleşim yeri belgesi)',
+    'Yerleşim yeri (ikametgâh) belgesi',
+  ],
+  driving_licence: ['Driving licence', 'Sürücü belgesi'],
+  tax_certificate: ['Tax certificate (vergi levhası)', 'Vergi levhası'],
+  bank_proof: ['Proof that the IBAN is yours', 'IBAN’ın size ait olduğunu gösteren belge'],
+  other: ['Another document', 'Başka bir belge'],
+};
+
+const DOCUMENT_HOW: Record<DocumentKind, [string, string]> = {
+  criminal_record: DOCUMENT_TEXT.criminal_record.how,
+  population_record: DOCUMENT_TEXT.population_record.how,
+  residence_record: [
+    'e-Devlet → “Yerleşim Yeri (İkametgâh) ve Diğer Adres Belgesi Sorgulama” → download the barcoded PDF.',
+    'e-Devlet → “Yerleşim Yeri (İkametgâh) ve Diğer Adres Belgesi Sorgulama” → barkodlu PDF’i indirin.',
+  ],
+  driving_licence: [
+    'A clear photo of the front of your licence, all four corners visible.',
+    'Sürücü belgenizin ön yüzünün, dört köşesi de görünen net bir fotoğrafı.',
+  ],
+  tax_certificate: [
+    'Download it as a PDF from the tax office’s online service (İnteraktif Vergi Dairesi → e-Vergi Levhası).',
+    'İnteraktif Vergi Dairesi → e-Vergi Levhası bölümünden PDF olarak indirin.',
+  ],
+  bank_proof: [
+    'A statement or receipt from your bank’s app that shows your name and the IBAN together.',
+    'Bankanızın uygulamasından, adınızı ve IBAN’ı birlikte gösteren bir hesap cüzdanı ya da dekont.',
+  ],
+  other: ['A PDF or a clear photo.', 'PDF ya da net bir fotoğraf.'],
+};
+
+const INFO_NAME: Record<InfoSubject, [string, string]> = {
+  legal_name: ['Your name', 'Adınız ve soyadınız'],
+  id_number: ['Your T.C. kimlik no', 'T.C. kimlik numaranız'],
+  phone: ['Your mobile number', 'Cep telefonu numaranız'],
+  email: ['Your email address', 'E-posta adresiniz'],
+  address: ['Your home address', 'İkamet adresiniz'],
+  city: ['The city you work in', 'Çalıştığınız şehir'],
+  iban: ['Your IBAN', 'IBAN’ınız'],
+  tax: ['How you are paid (tax details)', 'Ödeme şekliniz (vergi bilgileri)'],
+  other: ['A question', 'Bir soru'],
+};
+
+const day = (unix: number) => new Date((unix + 3 * 3600) * 1000).toISOString().slice(0, 10);
+
+const subjectName = (r: AgentRequest) =>
+  r.kind === 'document'
+    ? DOCUMENT_NAME[r.subject as DocumentKind]
+    : INFO_NAME[r.subject as InfoSubject];
+
+/** Everything staff asked this agent for: what waits for them first, each with the way to answer. */
+export function requestsPage(
+  nav: Nav,
+  profile: AgentProfile,
+  list: AgentRequest[],
+  errorText: string | null,
+  noticeText: string | null,
+): string {
+  const edit = profile.status === 'applied' ? '/apply' : '/account';
+  const open = list.filter((r) => r.status === 'open');
+  const waiting = list.filter((r) => r.status === 'answered');
+  const settled = list.filter((r) => r.status === 'accepted' || r.status === 'cancelled');
+  const head = (r: AgentRequest, state: [string, string, string]) => {
+    const [en, tr] = subjectName(r);
+    return `<h2>${icon(r.kind === 'document' ? 'file' : 'user')}<span>${esc(L(en, tr))}</span> <span class="status ${state[2]}">${esc(L(state[0], state[1]))}</span></h2>
+       <blockquote class="asked"><span class="hint">${esc(L('2earl wrote:', '2earl’ün notu:'))}</span> ${esc(r.note)}</blockquote>`;
+  };
+  const documentForm = (r: AgentRequest) => {
+    const [en, tr] = DOCUMENT_HOW[r.subject as DocumentKind];
+    const barcoded = BARCODED.includes(r.subject);
+    return `<p class="hint">${esc(L(en, tr))}</p>
+      <form method="post" action="/requests/${attr(r.id)}/document" enctype="multipart/form-data" class="stack">
+        <label>${esc(L('The document (PDF or photo, at most 10 MB)', 'Belge (PDF ya da fotoğraf, en çok 10 MB)'))} <input type="file" name="file" accept="application/pdf,image/*" required></label>
+        ${
+          barcoded
+            ? `<label>${esc(L('Barcode number on the document', 'Belgedeki barkod numarası'))} <input name="barcode" required maxlength="40" autocomplete="off" spellcheck="false">
+                 <span class="hint">${esc(L('Printed beside the barcode, at the bottom of the page.', 'Sayfanın altında, barkodun yanında yazar.'))}</span></label>`
+            : ''
+        }
+        <div><button type="submit">${esc(L('Upload', 'Yükle'))}</button></div>
+      </form>`;
+  };
+  const infoForm = (r: AgentRequest) => {
+    const question = r.subject === 'other';
+    return `${
+      question
+        ? ''
+        : `<p>${esc(L('Correct it in your details, then tell us it is done.', 'Bilgilerinizde düzeltin, ardından bize tamamlandığını bildirin.'))} <a class="button secondary" href="${edit}">${esc(L('Open my details', 'Bilgilerimi aç'))}</a></p>`
+    }
+      <form method="post" action="/requests/${attr(r.id)}/answer" class="stack">
+        <label>${esc(question ? L('Your answer', 'Yanıtınız') : L('A note for us (optional)', 'Bize notunuz (isteğe bağlı)'))}
+          <textarea name="answer" rows="3" maxlength="500"${question ? ' required' : ''}></textarea></label>
+        <div><button type="submit">${esc(question ? L('Send my answer', 'Yanıtımı gönder') : L('I corrected it', 'Düzelttim'))}</button></div>
+      </form>`;
+  };
+  const card = (r: AgentRequest) =>
+    `<section class="panel ask">
+       ${head(r, ['Waiting for you', 'Sizi bekliyor', 'pending'])}
+       <p class="hint">${esc(L(`Please answer by ${day(r.due_at)}.`, `Lütfen ${day(r.due_at)} tarihine kadar yanıtlayın.`))}</p>
+       ${r.kind === 'document' ? documentForm(r) : infoForm(r)}
+     </section>`;
+  const quiet = (r: AgentRequest, state: [string, string, string]) =>
+    `<section class="panel ask">${head(r, state)}${r.answer ? `<p><span class="hint">${esc(L('You wrote:', 'Yazdığınız:'))}</span> ${esc(r.answer)}</p>` : ''}</section>`;
+  const resend =
+    profile.status === 'applied' && open.length === 0 && list.length > 0
+      ? `<div class="callout">${icon('check')}<div><strong>${esc(L('Everything is answered', 'Her şey yanıtlandı'))}</strong><p>${esc(L('Send your application again so we can go on.', 'Devam edebilmemiz için başvurunuzu yeniden gönderin.'))}</p><p><a class="button" href="/apply">${esc(L('Go to my application', 'Başvuruma git'))}</a></p></div></div>`
+      : '';
+  return layout(
+    L('What we need from you', 'Sizden beklenenler'),
+    { ...nav, quiet: true },
+    `${notice(noticeText)}<div translate="no">
+       <h1>${esc(L('What we need from you', 'Sizden beklenenler'))}</h1>
+       <p class="lede">${esc(L('To go on with your account, 2earl asked for the things below. Answer each one here; don’t send documents by email.', 'Hesabınızla ilgili işleme devam edebilmek için 2earl aşağıdakileri istedi. Her birini buradan yanıtlayın; belgeleri e-postayla göndermeyin.'))}</p>
+     </div>
+     ${error(errorText)}
+     <div translate="no">
+       ${resend}
+       ${open.length === 0 && waiting.length === 0 && settled.length === 0 ? `<p class="panel">${esc(L('Nothing is asked of you right now.', 'Şu an sizden bir şey beklenmiyor.'))}</p>` : ''}
+       ${open.map(card).join('')}
+       ${waiting.length > 0 ? `<h2 class="group">${esc(L('Sent, waiting for 2earl', 'Gönderildi, 2earl’ün incelemesini bekliyor'))}</h2>${waiting.map((r) => quiet(r, ['Being checked', 'İnceleniyor', 'pending'])).join('')}` : ''}
+       ${settled.length > 0 ? `<details class="history"><summary>${esc(L('Earlier requests', 'Önceki talepler'))} (${String(settled.length)})</summary>${settled.map((r) => quiet(r, r.status === 'accepted' ? ['Accepted', 'Kabul edildi', 'active'] : ['Withdrawn by 2earl', '2earl geri çekti', 'cancelled'])).join('')}</details>` : ''}
+       <p class="hint">${esc(L('Documents are checked and then deleted; only the result is kept.', 'Belgeler incelenir ve ardından silinir; yalnızca sonuç saklanır.'))} <a href="/agreement#notice">${esc(L('Privacy notice', 'Aydınlatma metni'))}</a></p>
+     </div>`,
+  );
+}
+
+// ---- My data ---------------------------------------------------------------------------------------
+
+/** What Emanet holds about the agent, and asking for it to be erased. */
+export function myData(
+  nav: Nav,
+  profile: AgentProfile,
+  view: ErasureView,
+  errorText: string | null,
+  noticeText: string | null,
+): string {
+  const r = view.request;
+  const b = view.blockers;
+  const held = `<div class="panel"><h2>${esc(L('What Emanet holds about you', 'Emanet’in hakkınızda tuttukları'))}</h2>
+      <ul>
+        <li>${esc(L('Your details: name, ID number (encrypted), birth year, phone, email, address, city, IBAN, tax details.', 'Bilgileriniz: ad soyad, T.C. kimlik no (şifreli), doğum yılı, telefon, e-posta, adres, şehir, IBAN, vergi bilgileri.'))}</li>
+        <li>${esc(L('Your application: what you accepted and when, the result of the identity check, the result of each document check (never the document itself after it is checked).', 'Başvurunuz: neyi ne zaman kabul ettiğiniz, kimlik doğrulamasının sonucu, her belge incelemesinin sonucu (inceleme sonrası belgenin kendisi tutulmaz).'))}</li>
+        <li>${esc(L('Your work: the vehicles you claimed, where you reported them, the photos you took.', 'Çalışmanız: üstlendiğiniz araçlar, bildirdiğiniz konumlar, çektiğiniz fotoğraflar.'))}</li>
+        <li>${esc(L('Your payments, and the accounting records the law requires for them.', 'Ödemeleriniz ve mevzuatın bunlar için zorunlu kıldığı muhasebe kayıtları.'))}</li>
+      </ul>
+      <p><a href="https://login.2earl.com/account">${esc(L('Download a copy of your data from your 2earl account', 'Verilerinizin bir kopyasını 2earl hesabınızdan indirin'))}</a> · <a href="/agreement#notice">${esc(L('Privacy notice', 'Aydınlatma metni'))}</a></p>
+    </div>`;
+  const what = `<ul>
+      <li>${esc(L('Your account is closed for good. Vehicles you hold are released.', 'Hesabınız kalıcı olarak kapatılır. Üstlendiğiniz araçlar bırakılır.'))}</li>
+      <li>${esc(L('Your details, documents and identity-check records are removed from our working systems.', 'Bilgileriniz, belgeleriniz ve kimlik doğrulama kayıtlarınız çalışan sistemlerimizden kaldırılır.'))}</li>
+      <li>${esc(L('Payment and accounting records stay as long as the law requires (ten years).', 'Ödeme ve muhasebe kayıtları mevzuatın gerektirdiği süre (on yıl) boyunca tutulur.'))}</li>
+      <li>${esc(L(`A sealed (encrypted) copy of what was removed is kept in a separate, restricted archive for at most ${String(view.archive_years)} years, only for legal obligations and possible disputes. Only an authorised administrator can open it, with a written reason, and each opening is recorded. It is destroyed when the period ends. The file of a criminal record is never kept.`, `Kaldırılan verilerin şifreli bir kopyası, yalnızca hukuki yükümlülükler ve olası uyuşmazlıklar için, ayrı ve erişimi kısıtlı bir arşivde en çok ${String(view.archive_years)} yıl saklanır. Bu arşivi yalnızca yetkili bir yönetici, gerekçe yazarak açabilir ve her erişim kaydedilir. Süre sonunda yok edilir. Adli sicil kaydı dosyası hiçbir şekilde saklanmaz.`))}</li>
+    </ul>`;
+  const warnings = [
+    b.payouts_pending > 0
+      ? L(
+          `You have ${String(b.payouts_pending)} payment(s) not yet sent. Erasing removes the IBAN they would be paid to, so we carry out the request after they are sent.`,
+          `Henüz gönderilmemiş ${String(b.payouts_pending)} ödemeniz var. Silme işlemi ödemenin yapılacağı IBAN’ı da kaldıracağından, talebiniz ödemeler gönderildikten sonra yerine getirilir.`,
+        )
+      : '',
+    b.open_claims > 0
+      ? L(
+          `You hold ${String(b.open_claims)} vehicle(s). They are released when your data is erased.`,
+          `Üstlendiğiniz ${String(b.open_claims)} araç var. Verileriniz silindiğinde bırakılır.`,
+        )
+      : '',
+  ].filter(Boolean);
+  const form = `<section class="panel danger-zone"><h2>${esc(L('Ask for your data to be erased', 'Verilerinizin silinmesini isteyin'))}</h2>
+      <p>${esc(L('What happens when we carry it out:', 'Talebiniz yerine getirildiğinde:'))}</p>
+      ${what}
+      ${warnings.map((w) => `<p class="callout returned">${icon('info')}<span>${esc(w)}</span></p>`).join('')}
+      <form method="post" action="/privacy/erase" class="stack">
+        <label>${esc(L('Anything you want to tell us (optional)', 'Bize iletmek istediğiniz bir not (isteğe bağlı)'))} <textarea name="note" rows="3" maxlength="1000"></textarea></label>
+        <label class="check"><input type="checkbox" name="confirm" value="1" required> <span>${esc(L('I understand that my account will be closed and that this can’t be undone.', 'Hesabımın kapatılacağını ve bunun geri alınamayacağını anlıyorum.'))}</span></label>
+        <div><button class="danger" type="submit">${esc(L('Send the request', 'Talebi gönder'))}</button></div>
+      </form>
+      <p class="hint">${esc(L(`We decide within ${String(view.answer_days)} days at the latest and tell you by email. You can withdraw the request until then.`, `En geç ${String(view.answer_days)} gün içinde karar verir ve size e-postayla bildiririz. O zamana kadar talebinizi geri alabilirsiniz.`))}</p>
+    </section>`;
+  const status =
+    r?.status === 'open'
+      ? `<section class="panel"><h2>${esc(L('Your request to be erased', 'Silme talebiniz'))} <span class="status pending">${esc(L('Being decided', 'Değerlendiriliyor'))}</span></h2>
+           <dl class="facts"><dt>${esc(L('Received', 'Alındı'))}</dt><dd>${day(r.received_at)}</dd><dt>${esc(L('Answer at the latest', 'En geç yanıt'))}</dt><dd>${day(r.due_at)}</dd></dl>
+           ${what}
+           ${warnings.map((w) => `<p class="callout returned">${icon('info')}<span>${esc(w)}</span></p>`).join('')}
+           <form method="post" action="/privacy/withdraw"><button class="secondary" type="submit">${esc(L('Withdraw the request', 'Talebi geri al'))}</button></form>
+         </section>`
+      : r?.status === 'refused'
+        ? `<section class="panel"><h2>${esc(L('Your last request', 'Son talebiniz'))} <span class="status rejected">${esc(L('Not carried out', 'Yerine getirilmedi'))}</span></h2>
+             <p><span class="hint">${esc(L('Reason:', 'Gerekçe:'))}</span> ${esc(r.outcome ?? '')}</p>
+             <p class="hint">${esc(L('To object, write to iletisim@emanet.dev; you can also complain to the Personal Data Protection Board (KVKK).', 'İtiraz için iletisim@emanet.dev adresine yazabilir, ayrıca Kişisel Verileri Koruma Kurulu’na şikâyette bulunabilirsiniz.'))}</p>
+           </section>`
+        : '';
+  return layout(
+    L('My data', 'Verilerim'),
+    nav,
+    `${notice(noticeText)}<div translate="no"><h1>${esc(L('My data', 'Verilerim'))}</h1>
+       <p class="lede">${esc(L('What Emanet holds about you, how to get a copy, and how to have it erased.', 'Emanet’in hakkınızda tuttukları, bir kopyasını nasıl alacağınız ve nasıl sildireceğiniz.'))}</p></div>
+     ${error(errorText)}
+     <div translate="no">
+       ${held}
+       ${status}
+       ${r?.status === 'open' ? '' : form}
+       <p class="hint">${esc(L('To correct a detail, use your account page. For any other request under KVKK art. 11, write to iletisim@emanet.dev.', 'Bir bilgiyi düzeltmek için hesap sayfanızı kullanın. KVKK m.11 kapsamındaki diğer talepleriniz için iletisim@emanet.dev adresine yazın.'))}</p>
+     </div>`,
   );
 }

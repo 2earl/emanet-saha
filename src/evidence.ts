@@ -96,6 +96,8 @@ export async function storeDocument(
   kind: string,
   barcode: string,
   file: { bytes: Uint8Array; type: string },
+  /** The request this document answers, when staff asked for it. */
+  requestId?: string,
 ): Promise<Result<{ id: string }>> {
   const key = `agents/${agentId}/${kind}-${crypto.randomUUID()}`;
   const hash = await sha256(file.bytes);
@@ -109,6 +111,7 @@ export async function storeDocument(
     file_ref: key,
     sha256: hash,
     barcode,
+    ...(requestId ? { request_id: requestId } : {}),
   });
   if (!result.ok) await env.EVIDENCE.delete(key);
   return result;

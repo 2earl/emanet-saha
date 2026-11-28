@@ -106,6 +106,34 @@ describe('Turkish', () => {
     });
     await get('/account?done=saved', agent);
 
+    // What staff asked for, and the agent's own data.
+    const asked = await signIn('asked-1');
+    await get('/apply', asked);
+    await get('/requests', asked);
+    await send('/requests/r-question/answer', asked, { answer: '' });
+    await send('/requests/r-bank/answer', asked, { answer: 'x' });
+    await send('/requests/r-old/answer', asked, { answer: 'x' });
+    await sendFile('/requests/r-residence/document', asked, { barcode: '' }, 21);
+    await sendFile('/requests/r-old/document', asked, {}, 22);
+    await send('/requests/r-question/answer', asked, { answer: 'Bornova' });
+    await get('/requests?done=answered', asked);
+    await get('/requests?done=document', asked);
+    await get('/requests', await signIn('new-9'));
+    await get('/privacy', asked);
+    await send('/privacy/erase', asked, {});
+    await send('/privacy/erase', asked, { confirm: '1' });
+    await send('/privacy/erase', asked, { confirm: '1' });
+    await get('/privacy?done=erasure_requested', asked);
+    await send('/privacy/withdraw', asked);
+    await send('/privacy/withdraw', asked);
+    await get('/privacy?done=erasure_withdrawn', asked);
+    await send('/privacy/erase', asked, { confirm: '1' });
+    await coreHooks().testRefuseErasure('asked-1');
+    await get('/privacy', asked);
+    await get('/privacy', agent);
+    await get('/hunts', await signIn('activeasked-1'));
+    await get('/hunts', await signIn('erased-1'));
+
     const other = await signIn('active-2');
     await coreHooks().testReject(id, 'Plaka farklı');
     await get('/claims', agent);

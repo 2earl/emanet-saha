@@ -97,6 +97,7 @@ export function upload(
 interface CoreTestHooks {
   testCalls(): Promise<unknown[][]>;
   testReset(): Promise<void>;
+  testRefuseErasure(id: string): Promise<void>;
   testRefuseNextPhoto(): Promise<void>;
   testReject(claimId: string, note: string): Promise<void>;
 }

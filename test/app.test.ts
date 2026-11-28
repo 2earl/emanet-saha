@@ -151,6 +151,7 @@ describe('joining', () => {
       'new-1',
       'population_record',
       'NVI-987654',
+      null,
     ]);
     const ready = await (await request('/apply', { headers: { Cookie: cookie } })).text();
     expect(ready).toContain('Uploaded, waiting to be checked');
@@ -375,5 +376,101 @@ describe('finding a vehicle', () => {
     const response = await post('/hunts/v-1/claim', cookie, {}, { Origin: 'https://evil.example' });
     expect(response.status).toBe(403);
     expect(await callsOf('claim')).toEqual([]);
+  });
+});
+
+describe('what staff asked for', () => {
+  const pdf = {
+    bytes: new TextEncoder().encode('%PDF-1.7 test'),
+    type: 'application/pdf',
+    name: 'belge.pdf',
+  };
+
+  it('shows a banner everywhere and lists each request with its way to answer', async () => {
+    await coreHooks().testReset();
+    const cookie = await signIn('asked-1');
+    const apply = await (await request('/apply', { headers: { Cookie: cookie } })).text();
+    expect(apply).toContain('class="ask-banner"');
+    expect(apply).toContain('We need 4 things from you');
+    expect(apply).toContain('Answer what we asked for first.');
+    expect(apply).not.toContain('action="/apply/submit"');
+    const page = await (await request('/requests', { headers: { Cookie: cookie } })).text();
+    expect(page).not.toContain('class="ask-banner"');
+    expect(page).toContain('Adresinizde daire numarası eksik.');
+    expect(page).toContain('action="/requests/r-bank/document"');
+    expect(page).toContain('action="/requests/r-address/answer"');
+    // Only an e-Devlet document asks for a barcode.
+    const bank = page.slice(
+      page.indexOf('/requests/r-bank/document'),
+      page.indexOf('/requests/r-residence/document'),
+    );
+    expect(bank).not.toContain('name="barcode"');
+    expect(page.slice(page.indexOf('/requests/r-residence/document'))).toContain('name="barcode"');
+    expect(page).toContain('Earlier requests');
+  });
+
+  it('answers a question, uploads a requested document, and takes the kind from the request', async () => {
+    await coreHooks().testReset();
+    const cookie = await signIn('asked-2');
+    expect((await post('/requests/r-question/answer', cookie, { answer: '' })).status).toBe(422);
+    expect((await post('/requests/r-bank/answer', cookie, { answer: 'x' })).status).toBe(422);
+    const answered = await post('/requests/r-question/answer', cookie, { answer: 'Bornova' });
+    expect(answered.headers.get('Location')).toBe('/requests?done=answered');
+    // The form can't choose another kind: it comes from the request.
+    const sent = await upload(
+      '/requests/r-bank/document',
+      cookie,
+      { kind: 'criminal_record' },
+      { file: pdf },
+    );
+    expect(sent.headers.get('Location')).toBe('/requests?done=document');
+    expect(await callsOf('addDocument')).toEqual([['asked-2', 'bank_proof', '', 'r-bank']]);
+    expect(
+      (await upload('/requests/r-residence/document', cookie, { barcode: '' }, { file: pdf }))
+        .status,
+    ).toBe(422);
+    expect((await upload('/requests/r-bank/document', cookie, {}, { file: pdf })).status).toBe(422);
+    expect((await upload('/requests/nope/document', cookie, {}, { file: pdf })).status).toBe(422);
+    const page = await (await request('/requests', { headers: { Cookie: cookie } })).text();
+    expect(page).toContain('Sent, waiting for 2earl');
+    expect((await request('/requests')).status).toBe(302);
+  });
+});
+
+describe('my data', () => {
+  it('asks for erasure only with the box ticked, shows the request, and lets it be withdrawn', async () => {
+    await coreHooks().testReset();
+    const cookie = await signIn('pending-3');
+    const page = await (await request('/privacy', { headers: { Cookie: cookie } })).text();
+    expect(page).toContain('Ask for your data to be erased');
+    expect(page).toContain('at most 10 years');
+    expect((await post('/privacy/erase', cookie, { note: 'x' })).status).toBe(422);
+    expect(await callsOf('requestErasure')).toEqual([]);
+    const sent = await post('/privacy/erase', cookie, { confirm: '1', note: 'Bırakıyorum' });
+    expect(sent.headers.get('Location')).toBe('/privacy?done=erasure_requested');
+    expect(await callsOf('requestErasure')).toEqual([['pending-3', 'Bırakıyorum']]);
+    const open = await (await request('/privacy', { headers: { Cookie: cookie } })).text();
+    expect(open).toContain('Being decided');
+    expect(open).not.toContain('action="/privacy/erase"');
+    expect((await post('/privacy/erase', cookie, { confirm: '1' })).status).toBe(422);
+    expect((await post('/privacy/withdraw', cookie)).headers.get('Location')).toBe(
+      '/privacy?done=erasure_withdrawn',
+    );
+    expect((await post('/privacy/withdraw', cookie)).status).toBe(422);
+  });
+
+  it('warns an agent with payments waiting, and closes an erased account to everything', async () => {
+    await coreHooks().testReset();
+    const active = await (
+      await request('/privacy', { headers: { Cookie: await signIn('active-5') } })
+    ).text();
+    expect(active).toContain('2 payment(s) not yet sent');
+    const erased = await signIn('erased-1');
+    for (const path of ['/hunts', '/account', '/privacy', '/requests', '/apply']) {
+      const response = await request(path, { headers: { Cookie: erased } });
+      expect(await response.text(), path).toContain('Your data was erased');
+    }
+    expect((await post('/privacy/erase', erased, { confirm: '1' })).status).toBe(200);
+    expect(await callsOf('requestErasure')).toEqual([]);
   });
 });
