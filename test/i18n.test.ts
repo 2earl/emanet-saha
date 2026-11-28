@@ -96,6 +96,17 @@ describe('Turkish', () => {
     await get(`/claims/${id}?done=uploaded`, agent);
     await get('/claims', agent);
     await get('/earnings', agent);
+    await get('/earnings/po-1', agent);
+    await get('/earnings.csv', agent);
+    await get('/support', agent);
+    await get('/support/new', agent);
+    await send('/support/new', agent, { subject: 'x', category: 'payment', message: 'y' });
+    const ticket = await send('/support/new', agent, {
+      subject: 'Ödeme',
+      category: 'payment',
+      message: 'Ödemem nerede?',
+    });
+    expect(ticket).toBeDefined();
     await get('/account', agent);
     await send('/account', agent, {
       legal_name: 'Başka Biri',

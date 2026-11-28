@@ -2924,3 +2924,17 @@ button.danger {
   flex: 1 1 60%;
   min-width: 0;
 }
+
+/* Statements print as a plain page; the thread of a support message marks 2earl's answers. */
+@media print {
+  header,
+  nav,
+  footer,
+  .noprint,
+  .ask-banner {
+    display: none !important;
+  }
+}
+.card.staff {
+  border-left: 4px solid var(--accent, #f15a24);
+}

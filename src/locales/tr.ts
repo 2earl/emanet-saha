@@ -29,6 +29,18 @@ export const tr: Catalog = {
     'You already have a request being decided.': 'Değerlendirilen bir talebiniz zaten var.',
     'Your request is withdrawn. Nothing was erased.':
       'Talebiniz geri alındı. Hiçbir şey silinmedi.',
+    'Give your message a title of at least 3 characters.':
+      'Mesajınıza en az 3 karakterlik bir başlık verin.',
+    'Write your message first.': 'Önce mesajınızı yazın.',
+    'Choose what your message is about.': 'Mesajınızın konusunu seçin.',
+    'You have five open messages. Wait for an answer or close one first.':
+      'Beş açık mesajınız var. Bir yanıt bekleyin ya da birini kapatın.',
+    'This message was closed a while ago. Write a new one.':
+      'Bu mesaj bir süre önce kapandı. Yeni bir mesaj yazın.',
+    'Sent. We answer here and email you when we do.':
+      'Gönderildi. Yanıtı burada veririz ve e-postayla haber veririz.',
+    'Sent.': 'Gönderildi.',
+    'Closed.': 'Kapatıldı.',
     'Answer what we asked for first.': 'Önce sizden istenenleri yanıtlayın.',
     'Tick all three boxes to continue: the agreement, the privacy notice and the consent.':
       'Devam etmek için üç kutuyu da işaretleyin: sözleşme, aydınlatma metni ve açık rıza.',
@@ -50,6 +62,9 @@ export const tr: Catalog = {
     'My work': 'İşlerim',
     Earnings: 'Kazançlar',
     Account: 'Hesap',
+    Help: 'Yardım',
+    Gross: 'Brüt',
+    Withheld: 'Kesinti',
     'Sign in': 'Giriş yap',
     'Sign out': 'Çıkış yap',
     'Sign in with 2earl': '2earl ile giriş yap',

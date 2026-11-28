@@ -104,6 +104,11 @@ const ERROR_TEXT: Record<string, string> = {
   not_a_photo: 'Upload a photo (JPEG, PNG, WebP or HEIC).',
   too_much_evidence: 'This vehicle already has as many photos as it can hold.',
   invalid_kind: 'Choose which document the photo shows.',
+  invalid_subject: 'Give your message a title of at least 3 characters.',
+  invalid_message: 'Write your message first.',
+  invalid_category: 'Choose what your message is about.',
+  too_many_open: 'You have five open messages. Wait for an answer or close one first.',
+  closed_long: 'This message was closed a while ago. Write a new one.',
   no_location:
     'Your location is needed. Allow location for this site, or take the photo with location on.',
 };
@@ -120,6 +125,9 @@ const DONE: Record<string, string> = {
   answered: 'Sent. We’ll look at it.',
   erasure_requested: 'We have your request. We’ll email you our decision.',
   erasure_withdrawn: 'Your request is withdrawn. Nothing was erased.',
+  ticket_sent: 'Sent. We answer here and email you when we do.',
+  ticket_replied: 'Sent.',
+  ticket_closed: 'Closed.',
 };
 const done = (c: AppContext) => DONE[c.req.query('done') ?? ''] ?? null;
 
@@ -282,10 +290,20 @@ export function createApp(now: () => number) {
     '/requests/*',
     '/privacy',
     '/privacy/*',
+    '/support',
+    '/support/*',
   ]) {
     app.use(path, signedIn);
   }
-  for (const path of ['/hunts', '/hunts/*', '/claims', '/claims/*', '/earnings']) {
+  for (const path of [
+    '/hunts',
+    '/hunts/*',
+    '/claims',
+    '/claims/*',
+    '/earnings',
+    '/earnings/*',
+    '/earnings.csv',
+  ]) {
     app.use(path, signedIn, activeOnly);
   }
 
@@ -638,7 +656,7 @@ export function createApp(now: () => number) {
   );
 
   const showClaim = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {
-    const id = c.req.param('id') ?? '';
+    const id = c.req.param('id');
     const limited = await tooFast(c, 'places');
     if (limited) return limited;
     const details = await core(c.env).claimDetails(uid(c), id);
@@ -737,6 +755,80 @@ export function createApp(now: () => number) {
   app.get('/earnings', async (c) =>
     c.html(pages.earnings(nav(c), unwrap(await core(c.env).earnings(uid(c))), agent(c))),
   );
+
+  app.get('/earnings.csv', async (c) => {
+    const e = unwrap(await core(c.env).earnings(uid(c)));
+    return new Response(pages.earningsCsv(e), {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="emanet-payments.csv"',
+        'Cache-Control': 'no-store',
+      },
+    });
+  });
+
+  app.get('/earnings/:id', async (c) => {
+    const e = unwrap(await core(c.env).earnings(uid(c)));
+    const payout = e.payouts.find((p) => p.id === c.req.param('id'));
+    if (!payout) return notFound(c);
+    return c.html(pages.statement(nav(c), payout, agent(c)));
+  });
+
+  // ---- Support ----------------------------------------------------------------------------------
+
+  app.get('/support', async (c) => {
+    const list = await core(c.env).myTickets(uid(c));
+    return c.html(pages.supportList(nav(c), list.ok ? list.value : [], done(c)));
+  });
+
+  const newTicket = (
+    c: AppContext,
+    values: Record<string, string>,
+    error: string | null,
+    status: 200 | 422 = 200,
+  ) => c.html(pages.supportNew(nav(c), values, error), status);
+
+  app.get('/support/new', (c) =>
+    newTicket(c, { category: c.req.query('category') ?? 'other' }, null),
+  );
+
+  app.post('/support/new', async (c) => {
+    const v = await formValues(c);
+    const result = await core(c.env).openTicket(uid(c), {
+      subject: v.subject ?? '',
+      category: v.category ?? '',
+      message: v.message ?? '',
+    });
+    if (!result.ok) return newTicket(c, v, errorText(result.error), 422);
+    return c.redirect(`/support/${result.value.id}?done=ticket_sent`, 303);
+  });
+
+  const showTicket = async (c: AppContext, error: string | null, status: 200 | 404 | 422 = 200) => {
+    const found = await core(c.env).myTicket(uid(c), c.req.param('id'));
+    if (!found.ok) return notFound(c);
+    return c.html(pages.supportThread(nav(c), found.value, error, done(c)), status);
+  };
+
+  app.get('/support/:id', (c) => showTicket(c, null));
+
+  app.post('/support/:id/reply', async (c) => {
+    const v = await formValues(c);
+    const id = c.req.param('id');
+    const result = await core(c.env).replyTicket(uid(c), id, v.message ?? '');
+    if (!result.ok) {
+      return result.error === 'not_found'
+        ? notFound(c)
+        : showTicket(c, errorText(result.error), 422);
+    }
+    return c.redirect(`/support/${id}?done=ticket_replied`, 303);
+  });
+
+  app.post('/support/:id/close', async (c) => {
+    const id = c.req.param('id');
+    const result = await core(c.env).closeTicket(uid(c), id);
+    if (!result.ok) return notFound(c);
+    return c.redirect(`/support?done=ticket_closed`, 303);
+  });
 
   // Static files (styles, script, icon, manifest); anything else is not found.
   app.get('*', async (c) => {

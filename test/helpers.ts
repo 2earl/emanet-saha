@@ -100,6 +100,7 @@ interface CoreTestHooks {
   testRefuseErasure(id: string): Promise<void>;
   testRefuseNextPhoto(): Promise<void>;
   testReject(claimId: string, note: string): Promise<void>;
+  testStaffReply(ticketId: string, body: string): Promise<void>;
 }
 export const coreHooks = () => env.CORE as unknown as CoreTestHooks;
 

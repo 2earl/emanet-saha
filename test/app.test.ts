@@ -370,6 +370,65 @@ describe('finding a vehicle', () => {
     expect(locked.status).toBe(422);
   });
 
+  it('shows the payment flow, a statement and a CSV of all payments', async () => {
+    const cookie = await signIn('active-1');
+    const page = await (await request('/earnings', { headers: { Cookie: cookie } })).text();
+    expect(page).toContain('Withheld');
+    expect(page).toContain('/earnings/po-1');
+    expect(page).toContain('/earnings.csv');
+    const statement = await (
+      await request('/earnings/po-1', { headers: { Cookie: cookie } })
+    ).text();
+    expect(statement).toContain('Payment statement');
+    expect(statement).toContain('not an invoice or a tax document');
+    expect(statement).toContain('1326');
+    expect(statement).not.toContain('TR330006100519786457841326');
+    expect((await request('/earnings/other', { headers: { Cookie: cookie } })).status).toBe(404);
+    const csv = await request('/earnings.csv', { headers: { Cookie: cookie } });
+    expect(csv.headers.get('Content-Type')).toContain('text/csv');
+    expect(csv.headers.get('Content-Disposition')).toContain('attachment');
+    const body = await csv.text();
+    expect(body).toContain('"po-1";"06AB123";5000,00;0,00;5000,00;"sent"');
+    expect((await request('/earnings.csv')).status).toBe(302);
+  });
+
+  it('lets an agent write to support and read the answer', async () => {
+    const cookie = await signIn('active-1');
+    expect(await (await request('/support', { headers: { Cookie: cookie } })).text()).toContain(
+      'No messages yet.',
+    );
+    const bad = await post('/support/new', cookie, {
+      subject: 'x',
+      category: 'payment',
+      message: 'Hello',
+    });
+    expect(bad.status).toBe(422);
+    const sent = await post('/support/new', cookie, {
+      subject: 'Payment missing',
+      category: 'payment',
+      message: 'Where is my money?',
+    });
+    expect(sent.status).toBe(303);
+    const where = sent.headers.get('Location') ?? '';
+    expect(where).toMatch(/^\/support\/tk-\d+\?done=ticket_sent$/);
+    const id = where.split('?')[0] ?? '';
+    await coreHooks().testStaffReply(id.replace('/support/', ''), 'We are on it.');
+    const thread = await (await request(id, { headers: { Cookie: cookie } })).text();
+    expect(thread).toContain('We are on it.');
+    expect(thread).toContain('2earl answered');
+    const reply = await post(`${id}/reply`, cookie, { message: 'Thank you' });
+    expect(reply.headers.get('Location')).toBe(`${id}?done=ticket_replied`);
+    const closed = await post(`${id}/close`, cookie);
+    expect(closed.headers.get('Location')).toBe('/support?done=ticket_closed');
+    const other = await signIn('active-2');
+    expect((await request(id, { headers: { Cookie: other } })).status).toBe(404);
+  });
+
+  it('lets an applicant reach support too', async () => {
+    const cookie = await signIn('pending-7');
+    expect((await request('/support', { headers: { Cookie: cookie } })).status).toBe(200);
+  });
+
   it('refuses forms from other sites and visitors who are not signed in', async () => {
     expect((await request('/hunts')).headers.get('Location')).toBe('/signin?return=%2Fhunts');
     const cookie = await signIn('active-1');

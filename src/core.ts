@@ -125,6 +125,28 @@ export interface Earnings {
   paid_kurus: number;
 }
 
+export interface Ticket {
+  id: string;
+  subject: string;
+  category: string;
+  status: 'open' | 'answered' | 'closed';
+  created_at: number;
+  updated_at: number;
+  closed_at: number | null;
+}
+
+export interface TicketMessage {
+  id: string;
+  author_kind: 'requester' | 'staff' | 'note';
+  body: string;
+  created_at: number;
+}
+
+export interface TicketThread {
+  ticket: Ticket;
+  messages: TicketMessage[];
+}
+
 export interface AgreementText {
   title: string;
   intro: string;
@@ -256,6 +278,14 @@ export interface FieldApi {
   ): Promise<Result<{ id: string }>>;
   myClaims(agentId: string): Promise<Result<MyClaim[]>>;
   earnings(agentId: string): Promise<Result<Earnings>>;
+  openTicket(
+    agentId: string,
+    input: { subject: string; category: string; message: string },
+  ): Promise<Result<{ id: string }>>;
+  myTickets(agentId: string): Promise<Result<Ticket[]>>;
+  myTicket(agentId: string, ticketId: string): Promise<Result<TicketThread>>;
+  replyTicket(agentId: string, ticketId: string, body: string): Promise<Result<null>>;
+  closeTicket(agentId: string, ticketId: string): Promise<Result<null>>;
 }
 
 export const core = (env: Env): FieldApi => env.CORE as unknown as FieldApi;
