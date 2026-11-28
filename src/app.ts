@@ -62,6 +62,12 @@ const ERROR_TEXT: Record<string, string> = {
   consents_missing:
     'Tick all three boxes to continue: the agreement, the privacy notice and the consent.',
   documents_missing: 'Upload both e-Devlet documents first.',
+  requests_open: 'Answer what we asked for first.',
+  request_not_open: 'This request is already answered or was withdrawn.',
+  document_needed: 'This request needs a document. Upload it.',
+  answer_needed: 'Write your answer first.',
+  already_requested: 'You already have a request being decided.',
+  confirm_needed: 'Tick the box to confirm you understand.',
   invalid_address: 'Enter your home address (at least 10 characters).',
   invalid_document: 'Choose which document this is.',
   invalid_barcode: 'Enter the barcode number printed on the document.',
@@ -111,6 +117,9 @@ const DONE: Record<string, string> = {
   released: 'Given up. Someone else can look for it now.',
   uploaded: 'Uploaded.',
   document: 'Document uploaded.',
+  answered: 'Sent. We’ll look at it.',
+  erasure_requested: 'We have your request. We’ll email you our decision.',
+  erasure_withdrawn: 'Your request is withdrawn. Nothing was erased.',
 };
 const done = (c: AppContext) => DONE[c.req.query('done') ?? ''] ?? null;
 
@@ -220,6 +229,7 @@ export function createApp(now: () => number) {
   const nav = (c: AppContext): pages.Nav => ({
     signedIn: c.get('session') !== null,
     active: (c.get('agent') as AgentProfile | undefined)?.status === 'active',
+    requests: (c.get('agent') as AgentProfile | undefined)?.requests_open ?? 0,
   });
   const notFound = (c: AppContext) =>
     c.html(pages.problem(nav(c), 'Not found', 'This page doesn’t exist.'), 404);
@@ -252,6 +262,8 @@ export function createApp(now: () => number) {
       profile = await core(c.env).profile(session.uid);
     }
     c.set('agent', unwrap(profile));
+    // An erased account can read what happened and the legal texts, nothing else.
+    if (unwrap(profile).erased) return c.html(pages.waiting(nav(c), unwrap(profile)));
     await next();
     return undefined;
   };
@@ -261,7 +273,18 @@ export function createApp(now: () => number) {
     await next();
     return undefined;
   };
-  for (const path of ['/apply', '/apply/*', '/status', '/account']) app.use(path, signedIn);
+  for (const path of [
+    '/apply',
+    '/apply/*',
+    '/status',
+    '/account',
+    '/requests',
+    '/requests/*',
+    '/privacy',
+    '/privacy/*',
+  ]) {
+    app.use(path, signedIn);
+  }
   for (const path of ['/hunts', '/hunts/*', '/claims', '/claims/*', '/earnings']) {
     app.use(path, signedIn, activeOnly);
   }
@@ -513,6 +536,74 @@ export function createApp(now: () => number) {
     if (!result.ok)
       return c.html(pages.account(nav(c), agent(c), v, errorText(result.error), null), 422);
     return c.redirect('/account?done=saved', 303);
+  });
+
+  // ---- What staff asked for ---------------------------------------------------------------------
+
+  const requestsPage = async (c: AppContext, error: string | null, status: 200 | 422 = 200) => {
+    const list = await core(c.env).requests(uid(c));
+    return c.html(
+      pages.requestsPage(nav(c), agent(c), list.ok ? list.value : [], error, done(c)),
+      status,
+    );
+  };
+
+  app.get('/requests', (c) => requestsPage(c, null));
+
+  /** A detail is corrected, or a question answered in words. */
+  app.post('/requests/:id/answer', async (c) => {
+    const v = await formValues(c);
+    const result = await core(c.env).answerRequest(uid(c), c.req.param('id'), v.answer ?? '');
+    if (!result.ok) return requestsPage(c, errorText(result.error), 422);
+    return c.redirect('/requests?done=answered', 303);
+  });
+
+  /** A document staff asked for. Which kind it is comes from the request, never from the form. */
+  app.post('/requests/:id/document', async (c) => {
+    const limited = await tooFast(c, 'upload');
+    if (limited) return limited;
+    const form = await c.req.parseBody();
+    const list = await core(c.env).requests(uid(c));
+    const asked = (list.ok ? list.value : []).find(
+      (r) => r.id === c.req.param('id') && r.kind === 'document' && r.status === 'open',
+    );
+    if (!asked) return requestsPage(c, errorText('request_not_open'), 422);
+    const file = await readDocument(form.file);
+    if (!file.ok) return requestsPage(c, errorText(file.error), 422);
+    const stored = await storeDocument(
+      c.env,
+      uid(c),
+      asked.subject,
+      text(form.barcode),
+      file.value,
+      asked.id,
+    );
+    if (!stored.ok) return requestsPage(c, errorText(stored.error), 422);
+    return c.redirect('/requests?done=document', 303);
+  });
+
+  // ---- The agent's own data ---------------------------------------------------------------------
+
+  const myData = async (c: AppContext, error: string | null, status: 200 | 422 = 200) =>
+    c.html(
+      pages.myData(nav(c), agent(c), unwrap(await core(c.env).erasure(uid(c))), error, done(c)),
+      status,
+    );
+
+  app.get('/privacy', (c) => myData(c, null));
+
+  app.post('/privacy/erase', async (c) => {
+    const v = await formValues(c);
+    if (v.confirm !== '1') return myData(c, errorText('confirm_needed'), 422);
+    const result = await core(c.env).requestErasure(uid(c), v.note ?? '');
+    if (!result.ok) return myData(c, errorText(result.error), 422);
+    return c.redirect('/privacy?done=erasure_requested', 303);
+  });
+
+  app.post('/privacy/withdraw', async (c) => {
+    const result = await core(c.env).withdrawErasure(uid(c));
+    if (!result.ok) return myData(c, errorText(result.error), 422);
+    return c.redirect('/privacy?done=erasure_withdrawn', 303);
   });
 
   // ---- Vehicles and claims ----------------------------------------------------------------------

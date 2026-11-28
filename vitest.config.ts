@@ -56,13 +56,15 @@ function seed() {
     hashes: new Set(),
     documents: new Map(),
     accepted: new Map(),
+    requests: new Map(),
+    erasure: new Map(),
   };
 }
 seed();
 const log = (method, args) => s.calls.push([method, ...args]);
 function agentFor(id) {
   if (!s.agents.has(id)) {
-    const status = id.startsWith('active-') ? 'active' : id.startsWith('pending-') ? 'kyc_pending' : id.startsWith('returned-') ? 'applied' : null;
+    const status = id.startsWith('active-') ? 'active' : id.startsWith('pending-') ? 'kyc_pending' : id.startsWith('returned-') || id.startsWith('asked-') ? 'applied' : id.startsWith('erased-') ? 'banned' : id.startsWith('activeasked-') ? 'active' : null;
     if (status === null) return null;
     s.agents.set(id, { status, legal_name: 'Ayşe Yılmaz', city: 'İzmir', phone: '+905321234567',
       iban: 'TR330006100519786457841326', iban_verified: status === 'active', tax_profile: 'individual',
@@ -72,6 +74,21 @@ function agentFor(id) {
   }
   return s.agents.get(id);
 }
+/** Agents named "asked-*" (and "returned-*") were asked for an address, a bank proof, a residence record and a question. */
+function requestsFor(id) {
+  if (!s.requests.has(id)) {
+    const ask = (rid, kind, subject, note, status = 'open') => ({ id: rid, kind, subject, note, status, answer: null,
+      created_at: now() - 3600, due_at: now() + 14 * 86400, answered_at: null });
+    s.requests.set(id, id.startsWith('asked-') || id.startsWith('activeasked-') ? [
+      ask('r-address', 'info', 'address', 'Adresinizde daire numarası eksik.'),
+      ask('r-question', 'info', 'other', 'Hangi ilçelerde çalışacaksınız?'),
+      ask('r-bank', 'document', 'bank_proof', 'IBAN dekontu yükleyin.'),
+      ask('r-residence', 'document', 'residence_record', 'Yerleşim yeri belgesi yükleyin.'),
+      ask('r-old', 'info', 'phone', 'Telefon numaranızı doğrulayın.', 'accepted'),
+    ] : []);
+  }
+  return s.requests.get(id);
+}
 export class FieldApi extends WorkerEntrypoint {
   async register(id) {
     log('register', [id]);
@@ -80,7 +97,42 @@ export class FieldApi extends WorkerEntrypoint {
       submitted_at: null, strikes: 0, open_claims: 0, email: null, id_given: false, birth_year: null });
     return ok(null);
   }
-  async profile(id) { const a = agentFor(id); return a ? ok({ ...a }) : fail('not_found'); }
+  async profile(id) {
+    const a = agentFor(id);
+    if (!a) return fail('not_found');
+    if (id.startsWith('erased-')) return ok({ ...a, status: 'banned', erased: true, requests_open: 0 });
+    return ok({ ...a, requests_open: requestsFor(id).filter((r) => r.status === 'open').length });
+  }
+  async requests(id) { return ok(requestsFor(id)); }
+  async answerRequest(id, requestId, answer) {
+    log('answerRequest', [id, requestId, answer]);
+    const r = requestsFor(id).find((x) => x.id === requestId);
+    if (!r) return fail('not_found');
+    if (r.kind !== 'info') return fail('document_needed');
+    if (r.status !== 'open') return fail('request_not_open');
+    if (r.subject === 'other' && !answer) return fail('answer_needed');
+    r.status = 'answered'; r.answer = answer || null; r.answered_at = now();
+    return ok(null);
+  }
+  async erasure(id) {
+    return ok({ request: s.erasure.get(id) ?? null,
+      blockers: { open_claims: id.startsWith('active-') ? 1 : 0, payouts_pending: id.startsWith('active-') ? 2 : 0, payouts_sent: 0 },
+      answer_days: 30, archive_years: 10 });
+  }
+  async requestErasure(id, note) {
+    log('requestErasure', [id, note]);
+    if (s.erasure.get(id)?.status === 'open') return fail('already_requested');
+    s.erasure.set(id, { id: 'pr-1', status: 'open', received_at: now(), due_at: now() + 30 * 86400, outcome: null, closed_at: null });
+    return ok({ id: 'pr-1', due_at: now() + 30 * 86400 });
+  }
+  async withdrawErasure(id) {
+    log('withdrawErasure', [id]);
+    const r = s.erasure.get(id);
+    if (!r || r.status !== 'open') return fail('not_found');
+    r.status = 'withdrawn';
+    return ok(null);
+  }
+  async testRefuseErasure(id) { const r = s.erasure.get(id); r.status = 'refused'; r.outcome = 'Bekleyen ödemeniz var.'; }
   async updateProfile(id, input) {
     log('updateProfile', [id, input]);
     const a = agentFor(id);
@@ -117,8 +169,15 @@ export class FieldApi extends WorkerEntrypoint {
   async acceptance(id) { return ok(s.accepted.get(id) ?? null); }
   async documents(id) { return ok(s.documents.get(id) ?? []); }
   async addDocument(id, input) {
-    log('addDocument', [id, input.kind, input.barcode]);
-    if (!/^[A-Za-z0-9-]{6,40}$/.test(input.barcode)) return fail('invalid_barcode');
+    log('addDocument', [id, input.kind, input.barcode, input.request_id ?? null]);
+    const barcoded = ['criminal_record', 'population_record', 'residence_record'].includes(input.kind);
+    if (barcoded && !/^[A-Za-z0-9-]{6,40}$/.test(input.barcode)) return fail('invalid_barcode');
+    if (input.request_id) {
+      const r = requestsFor(id).find((x) => x.id === input.request_id && x.status === 'open' && x.subject === input.kind);
+      if (!r) return fail('request_not_open');
+      r.status = 'answered'; r.answered_at = now();
+      return ok({ id: 'doc-' + input.kind });
+    }
     const list = (s.documents.get(id) ?? []).filter((d) => d.kind !== input.kind);
     list.push({ id: 'doc-' + input.kind, kind: input.kind, barcode: input.barcode, uploaded_at: now(), status: 'uploaded', outcome: null, note: null });
     s.documents.set(id, list);
@@ -132,6 +191,7 @@ export class FieldApi extends WorkerEntrypoint {
     if (!a.legal_name) return fail('profile_incomplete');
     if (!a.address) return fail('profile_incomplete', 'address');
     if ((s.documents.get(id) ?? []).length < 2) return fail('documents_missing');
+    if (requestsFor(id).some((r) => r.status === 'open')) return fail('requests_open');
     s.accepted.set(id, { version: TERMS, sha256: 'a'.repeat(64), locale, accepted_at: now(), current: true });
     if (!a.email) return fail('email_not_verified');
     a.status = 'kyc_pending';

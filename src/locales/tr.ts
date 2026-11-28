@@ -18,6 +18,18 @@ export const tr: Catalog = {
   ],
   monthsShort: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
   messages: {
+    'Sent. We’ll look at it.': 'Gönderildi. İnceleyeceğiz.',
+    'This request is already answered or was withdrawn.':
+      'Bu talep zaten yanıtlandı ya da geri çekildi.',
+    'This request needs a document. Upload it.': 'Bu talep için belge gerekiyor. Belgeyi yükleyin.',
+    'Tick the box to confirm you understand.': 'Anladığınızı onaylamak için kutuyu işaretleyin.',
+    'We have your request. We’ll email you our decision.':
+      'Talebiniz bize ulaştı. Kararımızı e-postayla bildireceğiz.',
+    'Write your answer first.': 'Önce yanıtınızı yazın.',
+    'You already have a request being decided.': 'Değerlendirilen bir talebiniz zaten var.',
+    'Your request is withdrawn. Nothing was erased.':
+      'Talebiniz geri alındı. Hiçbir şey silinmedi.',
+    'Answer what we asked for first.': 'Önce sizden istenenleri yanıtlayın.',
     'Tick all three boxes to continue: the agreement, the privacy notice and the consent.':
       'Devam etmek için üç kutuyu da işaretleyin: sözleşme, aydınlatma metni ve açık rıza.',
     'Upload both e-Devlet documents first.': 'Önce iki e-Devlet belgesini de yükleyin.',

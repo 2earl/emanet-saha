@@ -31,6 +31,10 @@ export interface AgentProfile {
   /** What staff asked the applicant to correct, while the application is back with them. */
   review_note?: string | null;
   address?: string | null;
+  /** The person's data was erased; the account can't be used. */
+  erased?: boolean;
+  /** Things staff asked for that wait for the agent. */
+  requests_open?: number;
 }
 
 export interface ProfileInput {
@@ -140,8 +144,56 @@ export interface Acceptance {
   accepted_at: number;
   current: boolean;
 }
+/** The two every applicant gives. */
 export const DOCUMENT_KINDS = ['criminal_record', 'population_record'] as const;
-export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+/** Everything staff can ask for. */
+export const ALL_DOCUMENT_KINDS = [
+  'criminal_record',
+  'population_record',
+  'residence_record',
+  'driving_licence',
+  'tax_certificate',
+  'bank_proof',
+  'other',
+] as const;
+export type DocumentKind = (typeof ALL_DOCUMENT_KINDS)[number];
+/** Documents from e-Devlet carry a barcode number. */
+export const BARCODED: readonly string[] = [
+  'criminal_record',
+  'population_record',
+  'residence_record',
+];
+
+export type InfoSubject =
+  'legal_name' | 'id_number' | 'phone' | 'email' | 'address' | 'city' | 'iban' | 'tax' | 'other';
+
+/** One thing staff asked this agent for. */
+export interface AgentRequest {
+  id: string;
+  kind: 'info' | 'document';
+  subject: InfoSubject | DocumentKind;
+  note: string;
+  status: 'open' | 'answered' | 'accepted' | 'cancelled';
+  answer: string | null;
+  created_at: number;
+  due_at: number;
+  answered_at: number | null;
+}
+
+export interface ErasureRequest {
+  id: string;
+  status: 'open' | 'done' | 'refused' | 'withdrawn';
+  received_at: number;
+  due_at: number;
+  outcome: string | null;
+  closed_at: number | null;
+}
+export interface ErasureView {
+  request: ErasureRequest | null;
+  blockers: { open_claims: number; payouts_pending: number; payouts_sent: number };
+  answer_days: number;
+  archive_years: number;
+}
 export interface AgentDocument {
   id: string;
   kind: DocumentKind;
@@ -174,8 +226,13 @@ export interface FieldApi {
   documents(agentId: string): Promise<Result<AgentDocument[]>>;
   addDocument(
     agentId: string,
-    input: { kind: string; file_ref: string; sha256: string; barcode: string },
+    input: { kind: string; file_ref: string; sha256: string; barcode: string; request_id?: string },
   ): Promise<Result<{ id: string }>>;
+  requests(agentId: string): Promise<Result<AgentRequest[]>>;
+  answerRequest(agentId: string, requestId: string, answer: string): Promise<Result<null>>;
+  erasure(agentId: string): Promise<Result<ErasureView>>;
+  requestErasure(agentId: string, note: string): Promise<Result<{ id: string; due_at: number }>>;
+  withdrawErasure(agentId: string): Promise<Result<null>>;
   hunts(agentId: string, query: { city?: string; limit?: number }): Promise<Result<Hunt[]>>;
   claim(agentId: string, vehicleId: string): Promise<Result<Claim>>;
   release(agentId: string, claimId: string): Promise<Result<null>>;
