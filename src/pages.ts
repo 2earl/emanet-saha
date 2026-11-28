@@ -61,6 +61,8 @@ export interface Nav {
   requests?: number;
   /** The page that lists them doesn't announce itself. */
   quiet?: boolean;
+  /** Support messages 2earl answered; shown on every page except the support pages. */
+  answers?: number;
 }
 
 export function plate(value: string | null, size: '' | 'large' = ''): string {
@@ -125,6 +127,11 @@ ${options.script ? '<script src="/app.js" defer></script>' : ''}
 ${
   nav.requests && !nav.quiet
     ? `<a class="ask-banner" href="/requests" translate="no">${icon('info')}<span><strong>${esc(L(nav.requests === 1 ? 'We need one thing from you' : `We need ${String(nav.requests)} things from you`, nav.requests === 1 ? 'Sizden bir şey bekliyoruz' : `Sizden ${String(nav.requests)} şey bekliyoruz`))}</strong> ${esc(L('See what and answer', 'Ne olduğunu görün ve yanıtlayın'))}</span></a>`
+    : ''
+}
+${
+  nav.answers && nav.current !== 'support'
+    ? `<a class="ask-banner" href="/support" translate="no">${icon('mail')}<span><strong>${esc(L(nav.answers === 1 ? '2earl answered your message' : `2earl answered ${String(nav.answers)} of your messages`, nav.answers === 1 ? '2earl mesajınızı yanıtladı' : `2earl ${String(nav.answers)} mesajınızı yanıtladı`))}</strong> ${esc(L('Read the answer', 'Yanıtı okuyun'))}</span></a>`
     : ''
 }
 ${body}

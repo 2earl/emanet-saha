@@ -238,6 +238,7 @@ export function createApp(now: () => number) {
     signedIn: c.get('session') !== null,
     active: (c.get('agent') as AgentProfile | undefined)?.status === 'active',
     requests: (c.get('agent') as AgentProfile | undefined)?.requests_open ?? 0,
+    answers: c.get('answers') ?? 0,
   });
   const notFound = (c: AppContext) =>
     c.html(pages.problem(nav(c), 'Not found', 'This page doesn’t exist.'), 404);
@@ -270,6 +271,9 @@ export function createApp(now: () => number) {
       profile = await core(c.env).profile(session.uid);
     }
     c.set('agent', unwrap(profile));
+    // Support messages 2earl has answered: shown on every page until they are read.
+    const tickets = await core(c.env).myTickets(session.uid);
+    c.set('answers', tickets.ok ? tickets.value.filter((t) => t.status === 'answered').length : 0);
     // An erased account can read what happened and the legal texts, nothing else.
     if (unwrap(profile).erased) return c.html(pages.waiting(nav(c), unwrap(profile)));
     await next();
