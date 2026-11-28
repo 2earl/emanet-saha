@@ -109,7 +109,7 @@ function layout(title: string, nav: Nav, body: string, options: { script?: boole
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#1f2328">
+<meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141315" media="(prefers-color-scheme: dark)">
 <title>${esc(title)} · Emanet Saha</title>
 <link rel="stylesheet" href="/app.css">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -874,15 +874,16 @@ export function earnings(nav: Nav, e: Earnings, profile: AgentProfile): string {
        e.payouts.length === 0
          ? `<div class="panel empty">${scene('inbox')}<p>No payments yet.</p></div>${steps}`
          : `<p class="actions"><a class="button secondary" href="/earnings.csv" translate="no">${icon('download')} ${esc(L('Download all (CSV)', 'Tümünü indir (CSV)'))}</a></p>
-            <table class="payments"><thead><tr><th>Vehicle</th><th class="num">Gross</th><th class="num">Withheld</th><th class="num">Net</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>${e.payouts
+            <ul class="cards payments">${e.payouts
               .map(
-                (
-                  p,
-                ) => `<tr><td>${plate(p.plate)}</td><td class="num">${lira(p.gross_kurus)}</td><td class="num">${lira(p.withholding_kurus)}</td><td class="num">${lira(p.net_kurus)}</td>
-                 <td>${PAYOUT_TEXT[p.status] ?? data(p.status)}</td><td>${clock(p.updated_at)}</td>
-                 <td><a href="/earnings/${attr(p.id)}" translate="no">${esc(L('Statement', 'Özet'))}</a></td></tr>`,
+                (p) => `<li class="card">
+                  <div class="card-head">${plate(p.plate)}<span class="status ${attr(p.status)}">${PAYOUT_TEXT[p.status] ?? data(p.status)}</span></div>
+                  <p class="amount"><strong class="earn">${lira(p.net_kurus)}</strong> <span class="hint" translate="no">${esc(L('net to you', 'size net'))}</span></p>
+                  <p class="hint"><span translate="no">${esc(L('Gross', 'Brüt'))}</span> ${lira(p.gross_kurus)} · <span translate="no">${esc(L('Withheld', 'Kesinti'))}</span> ${lira(p.withholding_kurus)} · ${clock(p.updated_at)}</p>
+                  <p><a class="button secondary" href="/earnings/${attr(p.id)}" translate="no">${icon('file')} ${esc(L('Statement', 'Özet'))}</a></p>
+                </li>`,
               )
-              .join('')}</tbody></table>
+              .join('')}</ul>
             <p class="hint" translate="no">${esc(STATEMENT_NOTE())}</p>
             ${steps}`
      }`,
