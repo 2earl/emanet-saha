@@ -656,7 +656,7 @@ export function createApp(now: () => number) {
   );
 
   const showClaim = async (c: AppContext, error: string | null, status: 200 | 409 | 422 = 200) => {
-    const id = c.req.param('id');
+    const id = c.req.param('id') ?? '';
     const limited = await tooFast(c, 'places');
     if (limited) return limited;
     const details = await core(c.env).claimDetails(uid(c), id);
@@ -804,7 +804,7 @@ export function createApp(now: () => number) {
   });
 
   const showTicket = async (c: AppContext, error: string | null, status: 200 | 404 | 422 = 200) => {
-    const found = await core(c.env).myTicket(uid(c), c.req.param('id'));
+    const found = await core(c.env).myTicket(uid(c), c.req.param('id') ?? '');
     if (!found.ok) return notFound(c);
     return c.html(pages.supportThread(nav(c), found.value, error, done(c)), status);
   };
