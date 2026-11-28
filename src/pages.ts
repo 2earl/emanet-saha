@@ -8,6 +8,7 @@ import type {
   TaxProfile,
 } from './core';
 import { currentLocale, languageSwitcher } from './i18n';
+import { icon, scene, type IconName } from './icons';
 
 /**
  * Server-rendered pages, for phones first. Every dynamic value goes through `esc`, and data
@@ -69,14 +70,14 @@ export const clock = (unix: number) =>
   )}</time>`;
 
 function layout(title: string, nav: Nav, body: string, options: { script?: boolean } = {}): string {
-  const link = (key: Section, href: string, label: string) =>
-    `<a href="${href}"${nav.current === key ? ' aria-current="page"' : ''}>${label}</a>`;
+  const link = (key: Section, href: string, label: string, glyph: IconName) =>
+    `<a href="${href}"${nav.current === key ? ' aria-current="page"' : ''}>${icon(glyph)}<span>${label}</span></a>`;
   const sections = nav.active
     ? `<nav aria-label="Sections">
-        ${link('hunts', '/hunts', 'Vehicles')}
-        ${link('claims', '/claims', 'My work')}
-        ${link('earnings', '/earnings', 'Earnings')}
-        ${link('account', '/account', 'Account')}
+        ${link('hunts', '/hunts', 'Vehicles', 'car')}
+        ${link('claims', '/claims', 'My work', 'reviews')}
+        ${link('earnings', '/earnings', 'Earnings', 'wallet')}
+        ${link('account', '/account', 'Account', 'user')}
       </nav>`
     : '';
   const who = nav.signedIn
@@ -114,6 +115,9 @@ ${body}
 </html>`;
 }
 
+/** Text written in both languages where it is used; whatever shows it marks it translate="no". */
+const L = (en: string, tr: string) => (currentLocale() === 'tr' ? tr : en);
+
 const notice = (text: string | null) => (text ? `<p class="notice">${esc(text)}</p>` : '');
 const error = (text: string | null) =>
   text ? `<p class="error" role="alert">${esc(text)}</p>` : '';
@@ -131,6 +135,7 @@ export function home(): string {
     'Field agents',
     { signedIn: false },
     `<section class="hero">
+      ${scene('road')}
       <h1>Find vehicles with seizure orders. Get paid when they reach custody.</h1>
       <p class="lede">Creditors list vehicles that a court office has ordered to be taken. You look for them, and when you see one, you call the police. You are paid once the vehicle is in a custodian car park.</p>
       <p><a class="button" href="/signin">Sign in with 2earl</a></p>
@@ -262,6 +267,11 @@ export function apply(
     'Join',
     nav,
     `${notice(noticeText)}<h1>Become an agent</h1>
+     ${
+       profile.review_note
+         ? `<div class="callout returned" translate="no">${icon('info')}<div><strong>${esc(L('We need one thing corrected', 'Bir düzeltme gerekiyor'))}</strong><p>${esc(profile.review_note)}</p><p class="hint">${esc(L('Correct your details below and send the application again. Nothing you entered is lost.', 'Bilgilerinizi aşağıda düzeltip başvurunuzu yeniden gönderin. Girdiğiniz hiçbir şey kaybolmadı.'))}</p></div></div>`
+         : ''
+     }
      <p class="lede">Four steps here, then a short video call with your ID card. One person, one account.</p>
      ${error(errorText)}
      ${step('Your email address', hasEmail, email)}
@@ -303,13 +313,29 @@ const STATUS_TEXT: Record<AgentProfile['status'], string> = {
 };
 
 export function waiting(nav: Nav, profile: AgentProfile): string {
+  const tracker = `<div translate="no">
+      <ol class="tracker">
+        <li class="done">${icon('check')}<div><strong>${esc(L('Application sent', 'Başvuru gönderildi'))}</strong><span>${esc(L('We have your details and the rules you accepted.', 'Bilgileriniz ve kabul ettiğiniz kurallar bize ulaştı.'))}</span></div></li>
+        <li class="now">${icon('phone')}<div><strong>${esc(L('Video call', 'Görüntülü görüşme'))}</strong><span>${esc(L('We call you, you show your ID card, and we check that the IBAN is in your name. The email we sent says by when.', 'Sizi ararız, kimlik kartınızı gösterirsiniz ve IBAN’ın sizin adınıza olduğunu kontrol ederiz. Ne zamana kadar arayacağımız gönderdiğimiz e-postada yazıyor.'))}</span></div></li>
+        <li>${icon('car')}<div><strong>${esc(L('You start', 'Başlarsınız'))}</strong><span>${esc(L('Once approved you get an email and can see the vehicles in your city.', 'Onaylandığında e-posta alırsınız ve şehrinizdeki araçları görebilirsiniz.'))}</span></div></li>
+      </ol>
+      <div class="panel"><h2>${esc(L('Have ready for the call', 'Görüşme için hazır bulundurun'))}</h2>
+        <ul>
+          <li>${esc(L('Your Turkish ID card.', 'T.C. kimlik kartınız.'))}</li>
+          <li>${esc(L('A quiet, well-lit place and a working camera.', 'Sessiz, aydınlık bir ortam ve çalışan bir kamera.'))}</li>
+          <li>${esc(L('Your bank’s app, to show the IBAN is in your own name.', 'IBAN’ın kendi adınıza olduğunu göstermek için bankanızın uygulaması.'))}</li>
+        </ul>
+      </div>
+    </div>`;
   const body =
     profile.status === 'kyc_pending'
       ? `<h1>We’ll call you</h1>
-         <p class="lede">Someone from 2earl will call ${data(profile.phone ?? '')} within two working days for a short video call. Have your Turkish ID card ready. We check that the IBAN is in your name, then you can start.</p>
+         <p class="lede">Someone from 2earl will call ${data(profile.phone ?? '')} for a short video call. Have your Turkish ID card ready. We check that the IBAN is in your name, then you can start.</p>
+         ${tracker}
          <p><a href="/account">Change your phone number or IBAN</a></p>`
       : profile.status === 'suspended'
-        ? `<h1>Your account is suspended</h1><p class="lede">You can’t hold vehicles at the moment. 2earl will contact you.</p>`
+        ? `<h1>Your account is suspended</h1><p class="lede">You can’t hold vehicles at the moment. 2earl will contact you.</p>
+           <p class="panel" translate="no">${esc(L('The reason was sent to your email address. Payment for deliveries already confirmed is not affected. To object, reply to that email.', 'Gerekçe e-posta adresinize gönderildi. Onaylanmış teslimlerinizin ödemesi bundan etkilenmez. İtiraz etmek için o e-postayı yanıtlayın.'))}</p>`
         : `<h1>Your account is closed</h1><p class="lede">You can no longer work as an agent.</p>`;
   return layout(STATUS_TEXT[profile.status], nav, body);
 }
@@ -326,7 +352,7 @@ export function hunts(
 ): string {
   const cards =
     list.length === 0
-      ? '<p class="panel">No vehicles to look for here right now. Try another city, or come back later.</p>'
+      ? `<div class="panel empty">${scene('road')}<p>No vehicles to look for here right now. Try another city, or come back later.</p></div>`
       : `<ul class="cards">${list
           .map(
             (h) => `<li class="card">
@@ -569,7 +595,7 @@ export function claims(nav: Nav, list: MyClaim[], noticeText: string | null): st
     'My work',
     { ...nav, current: 'claims' },
     `${notice(noticeText)}<h1>My work</h1>
-     ${list.length === 0 ? '<p class="panel">Nothing yet. <a href="/hunts">Find a vehicle</a>.</p>' : `<ul class="cards">${list.map(row).join('')}</ul>`}`,
+     ${list.length === 0 ? `<div class="panel empty">${scene('plate')}<p>Nothing yet. <a href="/hunts">Find a vehicle</a>.</p></div>` : `<ul class="cards">${list.map(row).join('')}</ul>`}`,
   );
 }
 
@@ -586,7 +612,7 @@ export function earnings(nav: Nav, e: Earnings, profile: AgentProfile): string {
      <p class="hint">You are paid after the creditor has paid for the vehicle, to your IBAN, net of any withholding tax.</p>
      ${
        e.payouts.length === 0
-         ? '<p class="panel">No payments yet.</p>'
+         ? `<div class="panel empty">${scene('inbox')}<p>No payments yet.</p></div>`
          : `<table><thead><tr><th>Vehicle</th><th class="num">Net</th><th>Status</th><th>Updated</th></tr></thead><tbody>${e.payouts
              .map(
                (p) => `<tr><td>${plate(p.plate)}</td><td class="num">${lira(p.net_kurus)}</td>

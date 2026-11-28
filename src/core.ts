@@ -28,6 +28,8 @@ export interface AgentProfile {
   submitted_at: number | null;
   strikes: number;
   open_claims: number;
+  /** What staff asked the applicant to correct, while the application is back with them. */
+  review_note?: string | null;
 }
 
 export interface ProfileInput {

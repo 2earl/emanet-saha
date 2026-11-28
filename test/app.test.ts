@@ -47,6 +47,23 @@ describe('public pages', () => {
 });
 
 describe('joining', () => {
+  it('shows an application sent back what to correct, and a waiting one where it stands', async () => {
+    const returned = await signIn('returned-1');
+    const page = await (await request('/apply', { headers: { Cookie: returned } })).text();
+    expect(page).toContain('We need one thing corrected');
+    expect(page).toContain('The IBAN is not in your own name.');
+    const pending = await signIn('pending-7');
+    const home = await request('/', { headers: { Cookie: pending } });
+    const waiting =
+      home.status === 200
+        ? await home.text()
+        : await (
+            await request(home.headers.get('Location') ?? '/', { headers: { Cookie: pending } })
+          ).text();
+    expect(waiting).toContain('class="tracker"');
+    expect(waiting).toContain('Have ready for the call');
+  });
+
   it('registers a new agent, saves the profile and sends the application', async () => {
     const cookie = await signIn('new-1');
     const home = await request('/', { headers: { Cookie: cookie } });

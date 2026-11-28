@@ -1803,3 +1803,895 @@ main {
 .step.done h2::before {
   background: var(--good);
 }
+
+/* ==================================================================================================
+   Icons, drawn scenes and the richer page furniture (2026-11-28). Shared by the Emanet apps.
+   ================================================================================================== */
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  vertical-align: -0.22em;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scene {
+  width: min(15rem, 60%);
+  height: auto;
+  display: block;
+}
+
+/* Links and buttons that carry an icon keep it beside the words. */
+button:has(> .icon),
+.button:has(> .icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ---- The bar's links ---------------------------------------------------------------------------- */
+
+.bar nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.bar nav a .icon {
+  opacity: 0.8;
+}
+
+.bar nav a[aria-current='page'] .icon {
+  opacity: 1;
+}
+
+.bar nav .group {
+  display: none;
+}
+
+@media (min-width: 64rem) {
+  body:has(.bar nav .group) .bar nav .group {
+    display: block;
+    margin: 1rem 0 0.3rem;
+    padding: 0 0.75rem;
+    font-family: var(--display);
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  body:has(.bar nav .group) .bar nav .group:first-child {
+    margin-top: 0;
+  }
+}
+
+/* ---- A page's head: what it is, and the one thing to do from here -------------------------------- */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-head h1 {
+  margin-bottom: 0.25rem;
+}
+
+.page-head .lede {
+  margin: 0;
+  max-width: 44rem;
+}
+
+.page-head .scene {
+  width: 11rem;
+}
+
+.crumbs {
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+/* ---- Counts with an icon ------------------------------------------------------------------------- */
+
+.counts a > .icon,
+.counts div > .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--action);
+}
+
+@media (prefers-color-scheme: dark) {
+  .counts a > .icon,
+  .counts div > .icon {
+    color: #8fdcee;
+  }
+}
+
+/* ---- Queues against their deadlines -------------------------------------------------------------- */
+
+.queues {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.queue {
+  --state: var(--good);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.2rem 0.8rem;
+  padding: 1rem 1.1rem 1rem 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+
+.queue::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--state);
+}
+
+.queue:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgb(19 26 34 / 8%),
+    0 10px 28px rgb(19 26 34 / 9%);
+}
+
+.queue.soon {
+  --state: var(--wait);
+}
+
+.queue.late {
+  --state: var(--danger);
+}
+
+.queue.clear {
+  --state: var(--rule);
+}
+
+.queue-icon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 10px;
+  background: var(--tint);
+  color: var(--action);
+}
+
+.queue-icon .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.queue strong {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  font-family: var(--display);
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue.clear strong {
+  color: var(--muted);
+}
+
+.queue-name {
+  grid-column: 2;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.queue-state {
+  grid-column: 2;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--state);
+}
+
+.queue.clear .queue-state {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  margin-top: 0.7rem;
+  border-radius: 3px;
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.meter > span:first-child {
+  display: block;
+  width: var(--used, 0%);
+  height: 100%;
+  border-radius: 3px;
+  background: var(--state);
+}
+
+.queue-age {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .queue-icon {
+    color: #8fdcee;
+  }
+}
+
+/* ---- Empty pages say what to do, with a picture --------------------------------------------------- */
+
+.panel.empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 2rem 1.5rem 2.25rem;
+  text-align: center;
+}
+
+.panel.empty .scene {
+  width: 11rem;
+}
+
+.panel.empty p {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--muted);
+}
+
+.hero .scene {
+  margin-bottom: 1rem;
+}
+
+/* ---- A page with a list of its parts beside it ---------------------------------------------------- */
+
+.with-toc {
+  display: grid;
+  gap: 2rem;
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  align-content: start;
+  font-size: 0.95rem;
+}
+
+.toc strong {
+  flex: 1 0 100%;
+  font-family: var(--display);
+  font-size: 0.74rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.toc a {
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+.toc a:hover {
+  color: var(--ink);
+}
+
+.toc a[aria-current='page'] {
+  background: var(--tint);
+  border-color: transparent;
+  color: var(--action);
+  font-weight: 600;
+}
+
+.toc a.toc-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+@media (min-width: 72rem) {
+  .with-toc {
+    grid-template-columns: 14rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .toc {
+    position: sticky;
+    top: 1.5rem;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.1rem;
+  }
+
+  .toc strong {
+    flex: none;
+  }
+
+  .toc a {
+    background: none;
+    border-color: transparent;
+  }
+
+  .toc a.toc-more {
+    margin-top: 0.8rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+    border-radius: 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .toc a[aria-current='page'] {
+    color: #8fdcee;
+  }
+}
+
+/* ---- Settings: each with what it does, its default and its range ---------------------------------- */
+
+.setting-group {
+  margin-bottom: 2.5rem;
+  scroll-margin-top: 5rem;
+}
+
+.setting-group > h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0;
+}
+
+.setting-group > h2 .icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--action);
+}
+
+.settings-form {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.setting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(9rem, 13rem);
+  gap: 0.75rem 2rem;
+  align-items: start;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
+  scroll-margin-top: 5rem;
+}
+
+.setting:last-child {
+  border-bottom: 0;
+}
+
+.setting:target {
+  background: var(--tint);
+}
+
+.setting h3 {
+  margin: 0 0 0.25rem;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.setting p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.setting .setting-meta {
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.setting-value {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.setting-value input,
+.setting-value select {
+  width: 100%;
+}
+
+.with-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.with-unit > span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.setting-now {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.setting-save {
+  padding: 1rem 1.25rem;
+  background: var(--sunken);
+  border-top: 1px solid var(--rule);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+@media (max-width: 40rem) {
+  .setting {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Before confirming: a list to tick ------------------------------------------------------------ */
+
+fieldset.checks {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 1rem 1.15rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--action);
+  border-radius: var(--radius);
+}
+
+fieldset.checks legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+}
+
+fieldset.checks .hint {
+  margin: 0.2rem 0 0;
+}
+
+/* ---- The handbook --------------------------------------------------------------------------------- */
+
+.chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+.chapter {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  padding: 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    transform 0.12s,
+    border-color 0.12s;
+}
+
+.chapter:hover {
+  transform: translateY(-2px);
+  border-color: var(--action);
+}
+
+.chapter-icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin-bottom: 0.4rem;
+  border-radius: 10px;
+  background: var(--tint);
+  color: var(--action);
+}
+
+.chapter-no {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.25rem;
+  font-family: var(--display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.chapter strong {
+  font-family: var(--display);
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.chapter > span:last-child {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.prose {
+  max-width: 50rem;
+}
+
+.prose h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.prose h1 .icon {
+  width: 2rem;
+  height: 2rem;
+  color: var(--action);
+}
+
+.prose h2 {
+  margin-top: 2.25rem;
+}
+
+.prose p,
+.prose li {
+  line-height: 1.65;
+}
+
+.prose ol,
+.prose ul {
+  padding-left: 1.3rem;
+}
+
+.prose li {
+  margin-bottom: 0.45rem;
+}
+
+.prose table {
+  margin: 1rem 0 1.5rem;
+}
+
+.prose td {
+  vertical-align: top;
+  white-space: normal;
+}
+
+.prose td:first-child {
+  font-weight: 600;
+  min-width: 9rem;
+}
+
+.prose table.reference td:first-child {
+  font-weight: 400;
+}
+
+.prose .live {
+  padding: 0.05rem 0.4rem;
+  border-radius: 5px;
+  background: var(--tint);
+  color: var(--action);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.callout {
+  margin: 1.25rem 0;
+  padding: 0.9rem 1.1rem;
+  background: var(--tint);
+  border-left: 4px solid var(--action);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+/* A flow at a glance: steps in a row, an arrow between each. */
+ol.flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0;
+  margin: 1.25rem 0 1.75rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: flow;
+}
+
+ol.flow li {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.5rem 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+  counter-increment: flow;
+}
+
+ol.flow li::before {
+  content: counter(flow);
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+ol.flow li:not(:last-child) {
+  margin-right: 1.6rem;
+  position: relative;
+}
+
+ol.flow li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -1.25rem;
+  width: 0.9rem;
+  height: 2px;
+  background: var(--rule);
+}
+
+ol.flow li:last-child {
+  border-color: var(--good);
+}
+
+ol.flow li:last-child::before {
+  background: var(--good);
+}
+
+dl.glossary {
+  display: grid;
+  gap: 0;
+  margin: 1rem 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+dl.glossary > div {
+  display: grid;
+  grid-template-columns: minmax(10rem, 16rem) 1fr;
+  gap: 0.25rem 1.5rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+dl.glossary > div:last-child {
+  border-bottom: 0;
+}
+
+dl.glossary dt {
+  font-weight: 600;
+}
+
+dl.glossary .alt {
+  display: block;
+  font-weight: 400;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+dl.glossary dd {
+  margin: 0;
+}
+
+@media (max-width: 40rem) {
+  dl.glossary > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.pager a {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.pager a:hover {
+  border-color: var(--action);
+}
+
+.pager a span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.pager a.next {
+  text-align: right;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chapter-icon,
+  .prose h1 .icon,
+  .prose .live,
+  .setting-group > h2 .icon {
+    color: #8fdcee;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue,
+  .chapter {
+    transition: none;
+  }
+}
+
+/* ---- Emanet Saha: the tab bar with icons, the application's tracker -------------------------------- */
+
+@media (max-width: 47.99rem) {
+  .bar nav a {
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.45rem 0.2rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .bar nav a .icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .bar nav a[aria-current='page'] {
+    background: none;
+  }
+}
+
+ol.tracker {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+ol.tracker li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 0.9rem;
+  padding-bottom: 1.4rem;
+  color: var(--muted);
+}
+
+ol.tracker li:last-child {
+  padding-bottom: 0;
+}
+
+ol.tracker li > .icon {
+  z-index: 1;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0.6rem;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--rule);
+}
+
+ol.tracker li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: calc(1.3rem - 1px);
+  top: 2.6rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--rule);
+}
+
+ol.tracker li.done > .icon {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+ol.tracker li.done::before {
+  background: var(--good);
+}
+
+ol.tracker li.now {
+  color: var(--ink);
+}
+
+ol.tracker li.now > .icon {
+  border-color: var(--action);
+  color: var(--action);
+  box-shadow: 0 0 0 5px var(--tint);
+}
+
+ol.tracker strong {
+  display: block;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+ol.tracker span {
+  font-size: 0.95rem;
+}
+
+.callout.returned {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  border-left-color: var(--wait);
+  background: color-mix(in srgb, var(--wait) 9%, var(--paper));
+}
+
+.callout.returned .icon {
+  color: var(--wait);
+  margin-top: 0.15rem;
+}
+
+.callout.returned p {
+  margin: 0.25rem 0 0;
+}
+
+/* The sign-in button in the bar keeps a button's colours. */
+.bar .who a.button {
+  color: var(--action-ink);
+  text-decoration: none;
+}

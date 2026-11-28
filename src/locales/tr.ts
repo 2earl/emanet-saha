@@ -100,8 +100,8 @@ export const tr: Catalog = {
     Suspended: 'Askıya alındı',
     Closed: 'Kapatıldı',
     'We’ll call you': 'Sizi arayacağız',
-    'Someone from 2earl will call <0/> within two working days for a short video call. Have your Turkish ID card ready. We check that the IBAN is in your name, then you can start.':
-      '2earl’den biri iki iş günü içinde kısa bir görüntülü görüşme için <0/> numarasını arayacak. T.C. kimlik kartınızı hazır bulundurun. IBAN’ın sizin adınıza olduğunu doğruladıktan sonra başlayabilirsiniz.',
+    'Someone from 2earl will call <0/> for a short video call. Have your Turkish ID card ready. We check that the IBAN is in your name, then you can start.':
+      '2earl’den biri kısa bir görüntülü görüşme için <0/> numarasını arayacak. T.C. kimlik kartınızı hazır bulundurun. IBAN’ın sizin adınıza olduğunu doğruladıktan sonra başlayabilirsiniz.',
     'Change your phone number or IBAN': 'Telefon numaranızı veya IBAN’ınızı değiştirin',
     'Your account is suspended': 'Hesabınız askıya alındı',
     'You can’t hold vehicles at the moment. 2earl will contact you.':
